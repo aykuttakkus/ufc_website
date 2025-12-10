@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@200;300;400&family=Rajdhani:wght@200;300;400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* Event kartlarındaki beyaz yazılar için hover’da soldan sağa kırmızı efekt */
+.event-text-wipe {
+  position: relative;
+  display: inline-block;
+}
+
+/* Kart (Link) üstüne gelince tüm event-text-wipe yazılarında animasyon çalışsın */
+.group:hover .event-text-wipe {
+  background-image: linear-gradient(90deg, #dc2626 0%, #dc2626 100%);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  background-position: 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: event-text-wipe 0.4s ease-out forwards;
+}
+
+@keyframes event-text-wipe {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+
+/* Dikey uzatılmış metin - daha az stretch */
+.text-stretch-vertical {
+  transform: scaleY(1.08);     /* 1.3'ten 1.08'e düşürdük */
+  transform-origin: center;
+  display: inline-block;
+  line-height: 1.1;            /* daha sıkı satır aralığı */
+}
+
+/* UFC site yazı stilleri - siyah arka plan için uyarlandı - Anton font kullanılıyor (köşeli ve oturaklı) */
+.ufc-section-title {
+  font-size: 2.5rem;
+  line-height: 2.8rem;
+  color: #ffffff;
+  text-transform: uppercase;
+  font-family: 'Anton', Impact, "Arial Black", Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.8rem;
+  text-align: left;
+  display: block;
+}
+
+/* DÖVÜŞÇÜ İSİMLERİ – Rajdhani (daha ince ve modern) */
+.ufc-fighter-name {
+  font-family: 'Rajdhani', 'Barlow Condensed', 'Anton', Impact, "Arial Black", Arial, sans-serif !important;
+  font-weight: 400 !important;            /* Biraz kalınlaştırıldı (200 → 400) */
+  font-size: 1.3rem;          /* Küçültüldü (1.5rem → 1.3rem) */
+  line-height: 1.2;
+  letter-spacing: 0.05em;      /* Biraz daha açık */
+  text-transform: none;        /* Küçük-büyük harf normal kalsın */
+}
+
+/* Dikey stretch’i de biraz azaltalım ki daha az şişkin dursun */
+.text-stretch-vertical {
+  transform: scaleY(1.03);     /* 1.3 → 1.08 → 1.03 gibi daha doğal bir değer */
+  transform-origin: center;
+  display: inline-block;
+  line-height: 1.1;
+}
+
+/* Diğerleri aynı kalabilir */
+.ufc-weight-class {
+  font-size: 0.95rem;
+  line-height: 1.1rem;
+  color: #abadb1;
+  text-transform: uppercase;
+  font-family: 'Rajdhani', 'Barlow Condensed', 'Anton', Impact, "Arial Black", Arial, sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+.ufc-vs-text {
+  font-size: 1.1rem;
+  line-height: 1.3rem;
+  color: #abadb1;
+  text-transform: uppercase;
+  font-family: 'Anton', Impact, "Arial Black", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+/* 🟢 Fighter country text (görsel altındaki ülke ismi) */
+.ufc-country-text {
+  font-family: 'Barlow Condensed', system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    sans-serif;
+  font-size: 0.9rem;          /* Daha büyük */
+  font-weight: 400;            /* 300 → 400: daha kalın */
+  letter-spacing: 0.08em;      /* hafif aralıklı */
+  text-transform: uppercase;   /* COUNTRY */
+  line-height: 1.25;
+  color: rgb(148 163 184);     /* slate-400 */       /* 🟨 görselle araya boşluk */
+}
+
+/* Scrollbar gizleme */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+/* Border draw animation - Upcoming Events cards */
+@keyframes drawBorder {
+  from {
+    stroke-dashoffset: 800;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Main border path */
+.card-border-path {
+  stroke: #dc2626;
+  stroke-width: 2;
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800; /* başlangıçta tamamen gizli */
+}
+
+/* Glow effect on the drawing tip */
+.card-border-glow-path {
+  stroke: #ef4444;
+  stroke-width: 4;
+  stroke-dasharray: 30 770;
+  stroke-dashoffset: 800;
+  stroke-linecap: round;
+  opacity: 0; /* hover yokken görünmesin */
+}
+
+/* Hover state - animasyonu sadece hover'da başlat */
+.group:hover .card-border-path {
+  animation: drawBorder 1.5s ease-in-out forwards;
+}
+
+.group:hover .card-border-glow-path {
+  animation:
+    drawBorder 1.5s ease-in-out forwards,
+    glowPulse 1s ease-in-out infinite;
+  opacity: 0.8;
+}
+
+/* Scrollbar gizleme */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
