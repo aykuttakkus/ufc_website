@@ -9,7 +9,14 @@ const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:5050";
 
 export async function getAllUfcDivisions(): Promise<UfcDivisionsResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/ufc/rankings`);
+  const res = await fetch(`${API_BASE_URL}/api/ufc/rankings`, {
+    cache: 'no-cache',
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  });
 
   if (!res.ok) {
     throw new Error("Failed to fetch UFC divisions");
@@ -23,7 +30,15 @@ export async function getUfcDivision(
   divisionName: string
 ): Promise<UfcSingleDivisionResponse> {
   const res = await fetch(
-    `${API_BASE_URL}/api/ufc/rankings/${divisionName.toLowerCase()}`
+    `${API_BASE_URL}/api/ufc/rankings/${divisionName.toLowerCase()}`,
+    {
+      cache: 'no-cache',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    }
   );
 
   if (!res.ok) {

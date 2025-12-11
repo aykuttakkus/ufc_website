@@ -5,10 +5,6 @@ import {
   getUpcomingEvents,
   getPastEvents,
 } from "../services/ufcEventsService";
-import {
-  getEventById,
-  refreshEventDetails,
-} from "../controllers/eventDetailsController";
 
 const router = Router();
 
@@ -76,16 +72,8 @@ router.get("/past", async (_req, res) => {
   }
 });
 
-/**
- * POST /api/ufc/events/:ufcId/refresh-details
- * Belirli bir event için UFC'den fight card scrape eder, DB'yi günceller
- */
-router.post("/:ufcId/refresh-details", refreshEventDetails);
-
-/**
- * GET /api/ufc/events/:ufcId
- * Belirli bir event'in detaylarını döner (fights dahil)
- */
-router.get("/:ufcId", getEventById);
+// NOT: Tek event detayı ve refresh-details endpoint'leri
+// eventDetailsRoutes.ts içinde tanımlı: /api/ufc/events/:ufcId
+// Bu route çakışmasını önlemek için burada tanımlanmıyor.
 
 export default router;
