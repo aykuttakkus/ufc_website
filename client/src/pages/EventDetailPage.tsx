@@ -72,19 +72,7 @@ const SECTION_ORDER: CardSection[] = [
 
 // HTML vs JSON ayrımını düzgün görebilmek için helper
 async function safeFetchJson(url: string, options?: RequestInit) {
-  // Cache kontrolü - 304 hatasını önlemek için
-  const fetchOptions: RequestInit = {
-    ...options,
-    cache: 'no-cache', // Browser cache'i bypass et
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      ...options?.headers,
-    },
-  };
-  
-  const res = await fetch(url, fetchOptions);
+  const res = await fetch(url, options);
   const text = await res.text();
 
   let json: any;
@@ -122,25 +110,16 @@ function normalizeImageUrl(url: string | undefined): string | undefined {
 
 // Proxy URL oluştur - CORS sorunlarını bypass etmek için
 function getProxiedImageUrl(originalUrl: string | undefined): string | undefined {
-  if (!originalUrl) {
-    console.log("[getProxiedImageUrl] No original URL provided");
-    return undefined;
-  }
+  if (!originalUrl) return undefined;
   
   const normalized = normalizeImageUrl(originalUrl);
-  if (!normalized) {
-    console.log("[getProxiedImageUrl] Failed to normalize URL:", originalUrl);
-    return undefined;
-  }
+  if (!normalized) return undefined;
   
   // Eğer UFC URL'i ise proxy üzerinden getir
   if (normalized.includes("ufc.com")) {
-    const proxiedUrl = `${API_BASE}/api/ufc/proxy-image?url=${encodeURIComponent(normalized)}`;
-    console.log("[getProxiedImageUrl] Proxied URL:", proxiedUrl);
-    return proxiedUrl;
+    return `${API_BASE}/api/ufc/proxy-image?url=${encodeURIComponent(normalized)}`;
   }
   
-  console.log("[getProxiedImageUrl] Direct URL (not proxied):", normalized);
   return normalized;
 }
 
@@ -160,68 +139,15 @@ const EventDetailPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      console.log("[EventDetailPage] Loading event:", ufcId);
       const { res, json } = await safeFetchJson(
         `${API_BASE}/api/ufc/events/${ufcId}`
       );
-
-      console.log("[EventDetailPage] Response status:", res.status);
-      console.log("[EventDetailPage] Response data:", json);
-
-      // 304 Not Modified hatası kontrolü
-      if (res.status === 304) {
-        console.warn("[EventDetailPage] Received 304 - cached response, forcing reload");
-        // Cache'i bypass etmek için timestamp ekle
-        const { res: res2, json: json2 } = await safeFetchJson(
-          `${API_BASE}/api/ufc/events/${ufcId}?_t=${Date.now()}`
-        );
-        if (!res2.ok || !json2.success) {
-          throw new Error(json2.message || "Failed to load event");
-        }
-        const eventData = json2.data as UfcEvent;
-        console.log("[EventDetailPage] Event data loaded:", eventData);
-        console.log("[EventDetailPage] Fights count:", eventData.fights?.length || 0);
-        
-        // Debug: Image URL'lerini kontrol et
-        if (eventData.fights && eventData.fights.length > 0) {
-          eventData.fights.forEach((fight, index) => {
-            console.log(`[EventDetailPage] Fight ${index + 1}:`, {
-              redName: fight.redName,
-              blueName: fight.blueName,
-              redImageUrl: fight.redImageUrl,
-              blueImageUrl: fight.blueImageUrl,
-              proxiedRedUrl: getProxiedImageUrl(fight.redImageUrl),
-              proxiedBlueUrl: getProxiedImageUrl(fight.blueImageUrl),
-            });
-          });
-        }
-        
-        setEvent(eventData);
-        return;
-      }
 
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Failed to load event");
       }
 
       const eventData = json.data as UfcEvent;
-      console.log("[EventDetailPage] Event data loaded:", eventData);
-      console.log("[EventDetailPage] Fights count:", eventData.fights?.length || 0);
-      
-      // Debug: Image URL'lerini kontrol et
-      if (eventData.fights && eventData.fights.length > 0) {
-        eventData.fights.forEach((fight, index) => {
-          console.log(`[EventDetailPage] Fight ${index + 1}:`, {
-            redName: fight.redName,
-            blueName: fight.blueName,
-            redImageUrl: fight.redImageUrl,
-            blueImageUrl: fight.blueImageUrl,
-            proxiedRedUrl: getProxiedImageUrl(fight.redImageUrl),
-            proxiedBlueUrl: getProxiedImageUrl(fight.blueImageUrl),
-          });
-        });
-      }
-      
       setEvent(eventData);
     } catch (err: any) {
       console.error("[EventDetailPage] loadEvent error:", err);
@@ -344,18 +270,10 @@ const EventDetailPage: React.FC = () => {
   const fights = event.fights || [];
 
   // Bölümlere göre grupla
-  let groupedBySection = SECTION_ORDER.map((section) => ({
+  const groupedBySection = SECTION_ORDER.map((section) => ({
     section,
     fights: fights.filter((f) => (f.cardSection || "Unknown") === section),
   })).filter((g) => g.fights.length > 0);
-
-  // Eğer fights var ama hiçbir section'a eşleşmediyse, tüm fights'ları "Unknown" section'ında göster
-  if (groupedBySection.length === 0 && fights.length > 0) {
-    groupedBySection = [{
-      section: "Unknown" as CardSection,
-      fights: fights,
-    }];
-  }
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-10">
@@ -475,25 +393,16 @@ const EventDetailPage: React.FC = () => {
                         <div className="flex flex-col justify-center items-start flex-none w-[280px]">
                           <div className="flex items-center gap-4">
                             <div className="flex flex-col items-start gap-3 justify-center">
-                              {fight.redImageUrl ? (
+                              {fight.redImageUrl && (
                                 <div className="w-44 h-40 overflow-hidden rounded-md bg-black flex items-start justify-start relative">
                                   <img
-                                    src={getProxiedImageUrl(fight.redImageUrl) || ""}
+                                    src={getProxiedImageUrl(fight.redImageUrl)}
                                     alt={fight.redName}
                                     className="w-full h-full object-cover object-[center_top] scale-[1.05] origin-top"
                                     referrerPolicy="no-referrer"
                                     loading="lazy"
-                                    onLoad={() => {
-                                      console.log("[EventDetailPage] Red image loaded:", fight.redName, fight.redImageUrl);
-                                    }}
                                     onError={(e) => {
                                       const target = e.target as HTMLImageElement;
-                                      console.error("[EventDetailPage] Red image failed to load:", {
-                                        fighter: fight.redName,
-                                        originalUrl: fight.redImageUrl,
-                                        proxiedUrl: getProxiedImageUrl(fight.redImageUrl),
-                                        src: target.src,
-                                      });
                                       target.style.display = "none";
                                       // Fallback: parent div'e placeholder göster
                                       const parent = target.parentElement;
@@ -509,10 +418,6 @@ const EventDetailPage: React.FC = () => {
                                         Win
                                       </div>
                                     )}
-                                </div>
-                              ) : (
-                                <div className="w-44 h-40 rounded-md bg-gray-800 flex items-center justify-center">
-                                  <span className="text-gray-500 text-xs">No image</span>
                                 </div>
                               )}
 
@@ -590,25 +495,16 @@ const EventDetailPage: React.FC = () => {
                             </div>
 
                             <div className="flex flex-col items-end gap-3 justify-center">
-                              {fight.blueImageUrl ? (
+                              {fight.blueImageUrl && (
                                 <div className="w-44 h-40 overflow-hidden rounded-md bg-black flex items-start justify-end relative">
                                   <img
-                                    src={getProxiedImageUrl(fight.blueImageUrl) || ""}
+                                    src={getProxiedImageUrl(fight.blueImageUrl)}
                                     alt={fight.blueName}
                                     className="w-full h-full object-cover object-[center_top] scale-[1.05] origin-top"
                                     referrerPolicy="no-referrer"
                                     loading="lazy"
-                                    onLoad={() => {
-                                      console.log("[EventDetailPage] Blue image loaded:", fight.blueName, fight.blueImageUrl);
-                                    }}
                                     onError={(e) => {
                                       const target = e.target as HTMLImageElement;
-                                      console.error("[EventDetailPage] Blue image failed to load:", {
-                                        fighter: fight.blueName,
-                                        originalUrl: fight.blueImageUrl,
-                                        proxiedUrl: getProxiedImageUrl(fight.blueImageUrl),
-                                        src: target.src,
-                                      });
                                       target.style.display = "none";
                                       // Fallback: parent div'e placeholder göster
                                       const parent = target.parentElement;
@@ -624,10 +520,6 @@ const EventDetailPage: React.FC = () => {
                                         Win
                                       </div>
                                     )}
-                                </div>
-                              ) : (
-                                <div className="w-44 h-40 rounded-md bg-gray-800 flex items-center justify-center">
-                                  <span className="text-gray-500 text-xs">No image</span>
                                 </div>
                               )}
 

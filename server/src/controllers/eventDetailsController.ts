@@ -4,7 +4,7 @@ import {
   refreshEventDetailsInDb,
   getEventWithFights,
 } from "../services/ufcEventsDetail";
-import { UfcEvent, IUfcEvent } from "../models/UfcEvent";
+import { UfcEvent } from "../models/UfcEvent";
 
 /**
  * GET /api/ufc/events/:ufcId
@@ -21,49 +21,15 @@ export async function getEventById(req: Request, res: Response) {
       });
     }
 
-    console.log("[getEventById] Searching for ufcId:", ufcId);
-
-    // Önce ufcId ile ara
-    let event = await getEventWithFights(ufcId);
-
-    // Eğer bulunamazsa, _id ile de dene (fallback)
-    if (!event) {
-      console.log("[getEventById] Not found by ufcId, trying _id:", ufcId);
-      const foundById = await UfcEvent.findById(ufcId).lean().exec();
-      if (foundById) {
-        event = foundById as unknown as IUfcEvent;
-      }
-    }
-
-    // Hala bulunamazsa, name ile de dene (son çare)
-    if (!event) {
-      console.log("[getEventById] Not found by _id, trying name match");
-      const nameMatch = ufcId.replace(/-/g, " ").replace(/\s+/g, " ").trim();
-      const foundByName = await UfcEvent.findOne({
-        name: { $regex: new RegExp(nameMatch, "i") }
-      }).lean().exec();
-      if (foundByName) {
-        event = foundByName as unknown as IUfcEvent;
-      }
-    }
+    const event = await getEventWithFights(ufcId);
 
     if (!event) {
-      console.log("[getEventById] Event not found with any method");
-      // Debug: Tüm event'lerin ufcId'lerini listele
-      const allEvents = await UfcEvent.find({}).select("ufcId name").lean().exec();
-      console.log("[getEventById] Available events:", allEvents.map(e => ({ ufcId: e.ufcId, name: e.name })));
-      
       return res.status(404).json({
         success: false,
         message: "Event not found",
-        debug: {
-          searchedUfcId: ufcId,
-          availableUfcIds: allEvents.map(e => e.ufcId)
-        }
       });
     }
 
-    console.log("[getEventById] Event found:", event.ufcId, event.name);
     return res.json({
       success: true,
       data: event,

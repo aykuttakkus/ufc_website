@@ -1,31 +1,6 @@
 // src/config/swagger.ts
 import { OpenAPIV3 } from "openapi-types";
 
-// Environment'a göre server URL'lerini belirle
-const isProduction = process.env.NODE_ENV === "production";
-const PORT = process.env.PORT || 5050;
-
-// Server listesi - production'da sadece production URL, development'ta her ikisi
-const servers: OpenAPIV3.ServerObject[] = [];
-
-if (isProduction) {
-  // Production'da sadece production server
-  servers.push({
-    url: process.env.PRODUCTION_URL || "https://ufc-website-server.onrender.com",
-    description: "Production server",
-  });
-} else {
-  // Development'ta hem production hem local
-  servers.push({
-    url: process.env.PRODUCTION_URL || "https://ufc-website-server.onrender.com",
-    description: "Render production server",
-  });
-  servers.push({
-    url: `http://localhost:${PORT}`,
-    description: "Local development server",
-  });
-}
-
 export const swaggerDocument: OpenAPIV3.Document = {
   openapi: "3.0.0",
   info: {
@@ -37,7 +12,17 @@ export const swaggerDocument: OpenAPIV3.Document = {
       "- UFC Events: UFC sitesinden upcoming/past event header'larını ve event fight card (fights[]) detaylarını scrape edip MongoDB'de saklama.",
     version: "1.0.0",
   },
-  servers: servers,
+  servers: [
+    {
+      url: "https://ufc-website-server.onrender.com",
+      description: "Render production server",
+    },
+    {
+      url: "http://localhost:5050",
+      description: "Local development server",
+    },
+    
+  ],
   security: [{ bearerAuth: [] }],
   components: {
     securitySchemes: {

@@ -33,22 +33,15 @@ app.get("/api/health", (_req, res) => {
 });
 
 // 🔹 ROUTES
-// ÖNEMLİ: Route sıralaması önemli! Spesifik route'lar generic route'lardan önce gelmeli.
-
-// Event details routes (tek event + fights) - ÖNCE bu gelmeli
-// Çünkü /api/ufc/events/:ufcId gibi spesifik route'ları handle ediyor
-app.use("/api/ufc", eventDetailsRoutes);
-
-// UFC Events routes (liste, refresh, upcoming, past vs.)
-// Bu route'lar spesifik path'ler kullanıyor (/upcoming, /past, /refresh)
-// Bu yüzden generic /:ufcId route'undan sonra gelmeli
-app.use("/api/ufc/events", ufcEventsRoutes);
 
 // UFC Rankings routes
 app.use("/api/ufc/rankings", ufcRankingsRoutes);
 
 // Fighters routes
 app.use("/api/fighters", fighterRoutes);
+
+// UFC Events routes (liste, refresh, upcoming, past vs.)
+app.use("/api/ufc/events", ufcEventsRoutes);
 
 // Favorites routes
 app.use("/api/favorites", favoriteRoutes);
@@ -57,21 +50,10 @@ app.use("/api/favorites", favoriteRoutes);
 app.use("/api/auth", authRoutes);
 
 // Swagger routes
-app.use(
-  "/api-docs",
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerDocument, {
-    customCss: ".swagger-ui .topbar { display: none }",
-    customSiteTitle: "UFC API Documentation",
-    swaggerOptions: {
-      persistAuthorization: true, // Auth token'ı hatırla
-      displayRequestDuration: true, // Request süresini göster
-      filter: true, // Filter özelliğini aktif et
-      showExtensions: true,
-      showCommonExtensions: true,
-    },
-  })
-);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Event details routes (tek event + fights)
+app.use("/api/ufc", eventDetailsRoutes);
 
 // 🔹 SERVER START
 const start = async () => {

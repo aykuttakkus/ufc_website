@@ -577,83 +577,21 @@ function extractFighterNameFromCorner(
  * → TÜM maçları döner (main + prelims + early prelims), isim yoksa bile placeholder olarak kaydeder.
  * → Geçmiş event’lerde bonus / round / method / kazanan bilgilerini de döndürür.
  */
-// Delay helper - rate limiting için
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Retry helper - 403 hatası için
-async function retryRequest<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  delayMs: number = 2000
-): Promise<T> {
-  let lastError: any;
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-      if (error.response?.status === 403 && i < maxRetries - 1) {
-        console.log(`[retryRequest] 403 error, retrying ${i + 1}/${maxRetries} after ${delayMs}ms delay`);
-        await delay(delayMs * (i + 1)); // Exponential backoff
-      } else {
-        throw error;
-      }
-    }
-  }
-  throw lastError;
-}
-
 export async function scrapeUfcEventDetailsFromWeb(
   ufcId: string,
   eventNameForFallback?: string
 ): Promise<IEventFight[]> {
   const url = `https://www.ufc.com/event/${ufcId}`;
 
-  // Daha gerçekçi browser headers
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://www.ufc.com/",
-    "Origin": "https://www.ufc.com",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
-  };
-
-  const res = await retryRequest(
-    async () => {
-      try {
-        const response = await axios.get<string>(url, {
-          headers,
-          timeout: 20000,
-          maxRedirects: 5,
-        });
-        return response;
-      } catch (error: any) {
-        // Axios error handling - 403 gibi status kodlarını throw et
-        if (error.response) {
-          // Server responded with error status
-          if (error.response.status === 403) {
-            throw new Error(`Request failed with status code 403 - UFC website blocked the request for ${ufcId}`);
-          }
-          throw new Error(`Request failed with status code ${error.response.status}`);
-        }
-        throw error;
-      }
+  const res = await axios.get<string>(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     },
-    3,
-    3000 // 3 saniye delay
-  );
+    timeout: 15000,
+  });
 
   const html = res.data;
   const $ = cheerio.load(html);
@@ -905,21 +843,7 @@ export async function refreshEventDetailsInDb(
 export async function getEventWithFights(
   ufcId: string
 ): Promise<IUfcEvent | null> {
-  const event = await UfcEvent.findOne({ ufcId }).lean<IUfcEvent>().exec();
-  
-  if (!event) {
-    console.log(`[getEventWithFights] Event not found with ufcId: ${ufcId}`);
-    // Debug: Benzer ufcId'leri ara
-    const similar = await UfcEvent.find({
-      ufcId: { $regex: new RegExp(ufcId.replace(/-/g, ".*"), "i") }
-    }).select("ufcId name").lean().exec();
-    
-    if (similar.length > 0) {
-      console.log(`[getEventWithFights] Similar ufcIds found:`, similar.map(e => e.ufcId));
-    }
-  }
-  
-  return event;
+  return UfcEvent.findOne({ ufcId }).lean<IUfcEvent>().exec();
 }
 
 /**
@@ -950,20 +874,10 @@ async function bulkRefreshEventDetailsInternal(
     errors: [],
   };
 
-  for (let i = 0; i < events.length; i++) {
-    const ev = events[i];
+  for (const ev of events) {
     try {
-      console.log(`[${logPrefix}] Refreshing ${i + 1}/${events.length}: ${ev.ufcId}`);
       await refreshEventDetailsInDb(ev.ufcId);
       result.updatedCount += 1;
-      
-      // Rate limiting için delay - her request arasında 2-3 saniye bekle
-      // Son event'te delay'e gerek yok
-      if (i < events.length - 1) {
-        const delayTime = 2500 + Math.random() * 1000; // 2.5-3.5 saniye arası random delay
-        console.log(`[${logPrefix}] Waiting ${Math.round(delayTime)}ms before next request...`);
-        await delay(delayTime);
-      }
     } catch (err: any) {
       console.error(
         `[${logPrefix}] Failed to refresh event ${ev.ufcId}:`,
@@ -974,11 +888,6 @@ async function bulkRefreshEventDetailsInternal(
         ufcId: ev.ufcId,
         error: err.message || "Unknown error",
       });
-      
-      // Hata olsa bile delay yap - rate limiting'i aşmak için
-      if (i < events.length - 1) {
-        await delay(2000);
-      }
     }
   }
 
