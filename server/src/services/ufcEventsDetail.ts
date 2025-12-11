@@ -843,7 +843,21 @@ export async function refreshEventDetailsInDb(
 export async function getEventWithFights(
   ufcId: string
 ): Promise<IUfcEvent | null> {
-  return UfcEvent.findOne({ ufcId }).lean<IUfcEvent>().exec();
+  const event = await UfcEvent.findOne({ ufcId }).lean<IUfcEvent>().exec();
+  
+  if (!event) {
+    console.log(`[getEventWithFights] Event not found with ufcId: ${ufcId}`);
+    // Debug: Benzer ufcId'leri ara
+    const similar = await UfcEvent.find({
+      ufcId: { $regex: new RegExp(ufcId.replace(/-/g, ".*"), "i") }
+    }).select("ufcId name").lean().exec();
+    
+    if (similar.length > 0) {
+      console.log(`[getEventWithFights] Similar ufcIds found:`, similar.map(e => e.ufcId));
+    }
+  }
+  
+  return event;
 }
 
 /**

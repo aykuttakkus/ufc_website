@@ -13,19 +13,26 @@ import eventDetailsRoutes from "./routes/eventDetailsRoutes";
 
 const app = express();
 
-// JSON body parse
+// 🔹 JSON body parse
 app.use(express.json());
 
-// Basit CORS (şimdilik herkese izin verelim)
-app.use(cors());
+// 🔹 CORS
+// Şimdilik herkese izin veriyoruz, canlıya geçince origin listesi ekleyebilirsin.
+app.use(
+  cors({
+    origin: "*",
+  })
+);
 
-// HEALTH CHECK
+// 🔹 HEALTH CHECK
 app.get("/api/health", (_req, res) => {
   return res.json({
     success: true,
     message: "API is running",
   });
 });
+
+// 🔹 ROUTES
 
 // UFC Rankings routes
 app.use("/api/ufc/rankings", ufcRankingsRoutes);
@@ -43,18 +50,38 @@ app.use("/api/favorites", favoriteRoutes);
 app.use("/api/auth", authRoutes);
 
 // Swagger routes
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "UFC API Documentation",
+    swaggerOptions: {
+      persistAuthorization: true, // Auth token'ı hatırla
+      displayRequestDuration: true, // Request süresini göster
+      filter: true, // Filter özelliğini aktif et
+      showExtensions: true,
+      showCommonExtensions: true,
+    },
+  })
+);
 
 // Event details routes (tek event + fights)
 app.use("/api/ufc", eventDetailsRoutes);
 
-// SERVER START
+// 🔹 SERVER START
 const start = async () => {
-  await connectDB();
+  try {
+    await connectDB();
+    console.log("✅ MongoDB connected");
 
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-  });
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ Failed to start server:", err);
+    process.exit(1); // DB bağlanamazsa uygulamayı kapat
+  }
 };
 
 start();

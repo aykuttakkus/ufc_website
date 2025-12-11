@@ -1,12 +1,28 @@
 // src/api/eventsApi.ts
-import axios from "axios";
 import type { EventWithFights } from "../types";
+import { api } from "./http"; // ⚠️ BURASI ÖNEMLİ: ortak axios instance'ı
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5000/api",
-});
-
+// Tek event + fights detayını getir
 export async function getEventById(ufcId: string): Promise<EventWithFights> {
-  const res = await api.get(`/events/${ufcId}`);
+  // Backend: /api/ufc/events/:ufcId
+  const res = await api.get(`/ufc/events/${ufcId}`);
   return res.data.data;
+}
+
+// Upcoming events listesi
+export async function getUpcomingEvents(): Promise<EventWithFights[]> {
+  const res = await api.get("/ufc/events/upcoming");
+  return res.data.data;
+}
+
+// Past events listesi
+export async function getPastEvents(): Promise<EventWithFights[]> {
+  const res = await api.get("/ufc/events/past");
+  return res.data.data;
+}
+
+// (İstersen) tüm upcoming detaylarını backend'ten refresh eden endpoint
+export async function refreshAllUpcomingEvents() {
+  const res = await api.post("/ufc/events/refresh-all");
+  return res.data;
 }
