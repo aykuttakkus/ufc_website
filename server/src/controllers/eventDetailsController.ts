@@ -6,6 +6,9 @@ import {
 } from "../services/ufcEventsDetail";
 import { UfcEvent } from "../models/UfcEvent";
 
+// Küçük delay helper'ı – UFC'yi spamlememek için
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
 /**
  * GET /api/ufc/events/:ufcId
  * → DB'den event + fights döner (scrape etmez)
@@ -84,6 +87,7 @@ export async function refreshEventDetails(req: Request, res: Response) {
 /**
  * POST /api/ufc/events/refresh-all
  * → DB'deki TÜM event’ler (past + upcoming) için UFC web sayfasından detayları yeniler.
+ *   (Yumuşak mod: her event arası küçük delay ile)
  */
 export async function refreshAllEventsDetails(req: Request, res: Response) {
   try {
@@ -105,8 +109,13 @@ export async function refreshAllEventsDetails(req: Request, res: Response) {
 
     for (const ev of events) {
       try {
+        console.log("[refreshAllEventsDetails] Updating:", ev.ufcId);
+
         await refreshEventDetailsInDb(ev.ufcId);
         result.updatedCount += 1;
+
+        // UFC'yi çok sık sık dürtmemek için ufak bekleme
+        await sleep(800);
       } catch (err: any) {
         console.error(
           `[refreshAllEventsDetails] Failed for ${ev.ufcId}:`,
@@ -115,8 +124,11 @@ export async function refreshAllEventsDetails(req: Request, res: Response) {
         result.failedCount += 1;
         result.errors.push({
           ufcId: ev.ufcId,
-          error: err.message,
+          error: err.message || "Unknown error",
         });
+
+        // Arka arkaya 403 yememek için biraz daha uzun bekle
+        await sleep(1000);
       }
     }
 
@@ -136,11 +148,11 @@ export async function refreshAllEventsDetails(req: Request, res: Response) {
 /**
  * POST /api/ufc/events/refresh-past
  * → SADECE PAST event’leri (isUpcoming === false) UFC web sayfasından yeniler.
+ *   (Yumuşak mod: her event arası küçük delay ile)
  */
 export async function refreshPastEventsDetails(req: Request, res: Response) {
   try {
     // Past event kriteri: isUpcoming === false
-    // İstersen burayı date < now şeklinde de yapabilirsin.
     const events = await UfcEvent.find({ isUpcoming: false });
 
     if (!events.length) {
@@ -159,8 +171,12 @@ export async function refreshPastEventsDetails(req: Request, res: Response) {
 
     for (const ev of events) {
       try {
+        console.log("[refreshPastEventsDetails] Updating:", ev.ufcId);
+
         await refreshEventDetailsInDb(ev.ufcId);
         result.updatedCount += 1;
+
+        await sleep(800);
       } catch (err: any) {
         console.error(
           `[refreshPastEventsDetails] Failed for ${ev.ufcId}:`,
@@ -169,8 +185,10 @@ export async function refreshPastEventsDetails(req: Request, res: Response) {
         result.failedCount += 1;
         result.errors.push({
           ufcId: ev.ufcId,
-          error: err.message,
+          error: err.message || "Unknown error",
         });
+
+        await sleep(1000);
       }
     }
 

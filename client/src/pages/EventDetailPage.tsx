@@ -7,7 +7,6 @@ import "../index.css";
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:5050";
 
-// 🔹 Type tanımları
 export type CardSection = "Main Card" | "Prelims" | "Early Prelims" | "Unknown";
 
 export interface EventFight {
@@ -60,7 +59,6 @@ export interface UfcEvent {
   updatedAt?: string;
 }
 
-// Bölümleri belli bir sırada göstermek için
 const SECTION_ORDER: CardSection[] = [
   "Main Card",
   "Prelims",
@@ -68,7 +66,6 @@ const SECTION_ORDER: CardSection[] = [
   "Unknown",
 ];
 
-// API'den gelenin JSON olduğundan emin olmak için helper
 async function safeFetchJson(url: string, options?: RequestInit) {
   const res = await fetch(url, options);
   const text = await res.text();
@@ -89,35 +86,31 @@ async function safeFetchJson(url: string, options?: RequestInit) {
   return { res, json };
 }
 
-// Relative/tuhaf URL'leri normalize et
+// UFC görsel URL'lerini normalize et (her zaman https://www.ufc.com/... yap)
 function normalizeImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
 
-  if (url.startsWith("http://") || url.startsWith("https://")) {
+  // http -> https
+  if (url.startsWith("http://")) {
+    url = url.replace("http://", "https://");
+  }
+
+  // Tam https URL ise
+  if (url.startsWith("https://")) {
+    // https://ufc.com -> https://www.ufc.com
+    if (url.startsWith("https://ufc.com")) {
+      return url.replace("https://ufc.com", "https://www.ufc.com");
+    }
     return url;
   }
 
+  // /images/... gibi relative URL
   if (url.startsWith("/")) {
     return `https://www.ufc.com${url}`;
   }
 
+  // Aksi durumda da base ekle
   return `https://www.ufc.com/${url}`;
-}
-
-// UFC görsellerini proxy üzerinden çek
-function getProxiedImageUrl(originalUrl: string | undefined): string | undefined {
-  if (!originalUrl) return undefined;
-
-  const normalized = normalizeImageUrl(originalUrl);
-  if (!normalized) return undefined;
-
-  if (normalized.includes("ufc.com")) {
-    return `${API_BASE}/api/ufc/proxy-image?url=${encodeURIComponent(
-      normalized
-    )}`;
-  }
-
-  return normalized;
 }
 
 const EventDetailPage: React.FC = () => {
@@ -344,19 +337,15 @@ const EventDetailPage: React.FC = () => {
                   const isRedChampion = isChampionshipBout;
                   const isBlueChampion = false;
 
-                  const redImgSrc = getProxiedImageUrl(fight.redImageUrl);
-                  const blueImgSrc = getProxiedImageUrl(fight.blueImageUrl);
+                  const redImgSrc = normalizeImageUrl(fight.redImageUrl);
+                  const blueImgSrc = normalizeImageUrl(fight.blueImageUrl);
 
                   const redFlagSrc = fight.redCountryCode
-                    ? getProxiedImageUrl(
-                        `https://ufc.com/images/flags/${fight.redCountryCode}.PNG`
-                      )
+                    ? `https://www.ufc.com/images/flags/${fight.redCountryCode}.PNG`
                     : undefined;
 
                   const blueFlagSrc = fight.blueCountryCode
-                    ? getProxiedImageUrl(
-                        `https://ufc.com/images/flags/${fight.blueCountryCode}.PNG`
-                      )
+                    ? `https://www.ufc.com/images/flags/${fight.blueCountryCode}.PNG`
                     : undefined;
 
                   return (
@@ -544,7 +533,6 @@ const EventDetailPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Sonuç bloğu */}
                       {!event.isUpcoming && (
                         <div className="-mt-8 flex justify-center">
                           <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center text-[11px] md:text-xs w-full max-w-[600px] gap-x-4">

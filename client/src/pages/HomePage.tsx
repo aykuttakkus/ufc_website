@@ -10,41 +10,33 @@ import {
 import { getAllUfcDivisions } from "../api/rankApi";
 import { getFighters } from "../api/fighters";
 
-// Backend base URL
-const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:5050";
-
-// URL'yi normalize et - relative URL'leri tam URL'ye çevir
+// UFC görsel URL'lerini normalize et (her zaman https://www.ufc.com/... yap)
 function normalizeImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
 
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
+  let u = url.trim();
+
+  // http -> https
+  if (u.startsWith("http://")) {
+    u = u.replace("http://", "https://");
   }
 
-  if (url.startsWith("/")) {
-    return `https://www.ufc.com${url}`;
+  // Tam https URL ise
+  if (u.startsWith("https://")) {
+    // https://ufc.com -> https://www.ufc.com
+    if (u.startsWith("https://ufc.com")) {
+      u = u.replace("https://ufc.com", "https://www.ufc.com");
+    }
+    return u;
   }
 
-  return `https://www.ufc.com/${url}`;
-}
-
-// Proxy URL oluştur - CORS sorunlarını bypass etmek için
-function getProxiedImageUrl(
-  originalUrl: string | undefined
-): string | undefined {
-  if (!originalUrl) return undefined;
-
-  const normalized = normalizeImageUrl(originalUrl);
-  if (!normalized) return undefined;
-
-  if (normalized.includes("ufc.com")) {
-    return `${API_BASE}/api/ufc/proxy-image?url=${encodeURIComponent(
-      normalized
-    )}`;
+  // /images/... gibi relative URL
+  if (u.startsWith("/")) {
+    return `https://www.ufc.com${u}`;
   }
 
-  return normalized;
+  // Diğer durumlarda da base ekle
+  return `https://www.ufc.com/${u}`;
 }
 
 import aspirallBelt from "../assets/champions_belt_img/ASPINALL_TOM_BELT_10-25.avif";
@@ -196,7 +188,6 @@ export default function HomePage() {
           }
         });
         setChampions(championsList);
-
       } catch (err: any) {
         console.error("[HomePage] Error loading data:", err);
         setError(err.message || "Failed to load data");
@@ -233,20 +224,15 @@ export default function HomePage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-12">
         {/* HERO – FEATURED EVENT & PAST EVENT */}
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          {featuredEvent && (
-            <HeroSection event={featuredEvent} isNext={true} />
-          )}
+          {featuredEvent && <HeroSection event={featuredEvent} isNext={true} />}
           {pastEvent && <HeroSection event={pastEvent} isNext={false} />}
         </div>
 
         {/* UPCOMING EVENTS */}
-        {upcomingEvents.length > 0 && (
-        <UpcomingEvents events={upcomingEvents} />
-        )}
+        {upcomingEvents.length > 0 && <UpcomingEvents events={upcomingEvents} />}
 
         {/* CHAMPIONS ROW */}
         {champions.length > 0 && <ChampionsRow champions={champions} />}
-
       </div>
     </section>
   );
@@ -261,12 +247,17 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
 
   // Main card fights
   const mainCardFights =
-    event.fights?.filter((f) => f.cardSection === "Main Card").slice(0, 2) || [];
+    event.fights?.filter((f) => f.cardSection === "Main Card").slice(0, 2) ||
+    [];
 
   // Main event fighters
   const mainEvent = mainCardFights[0];
   const redCorner = mainEvent?.redName || "";
   const blueCorner = mainEvent?.blueName || "";
+
+  // 🔹 Burada event görsellerini normalize ediyoruz (proxy yok)
+  const redImgSrc = normalizeImageUrl(mainEvent?.redImageUrl);
+  const blueImgSrc = normalizeImageUrl(mainEvent?.blueImageUrl);
 
   // Event tag
   const getEventTag = () => {
@@ -367,7 +358,6 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
 
         {/* Content wrapper */}
         <div className="hero-content">
-
           {/* Event Info Header */}
           <div className="hero-header">
             <div className="hero-badges">
@@ -379,7 +369,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                   style={{ backgroundColor: colorScheme.primary }}
                 />
                 {isNext ? "NEXT" : "PAST"} {getEventTag()}
-                  </span>
+              </span>
 
               {/* Date badge */}
               <span className={`hero-date-badge ${colorScheme.badgeBg}`}>
@@ -402,7 +392,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                   year: "numeric",
                 })}
               </span>
-      </div>
+            </div>
 
             <h1 className="hero-title">
               <span className="hero-title-text">{event.name}</span>
@@ -420,55 +410,55 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
               {/* Red Corner Fighter */}
               <div className="hero-fighter-wrapper left">
                 <div className="hero-fighter-card red">
-                  {mainEvent.redImageUrl && (
+                  {redImgSrc && (
                     <div className="hero-fighter-image-container">
                       <img
-                        src={getProxiedImageUrl(mainEvent.redImageUrl)}
+                        src={redImgSrc}
                         alt={redCorner}
                         className="hero-fighter-image"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-              </div>
+                    </div>
                   )}
                   <div className="hero-fighter-info">
                     <span className="hero-fighter-name">{redCorner}</span>
                   </div>
                 </div>
-            </div>
+              </div>
 
               {/* VS – sadece text, çerçeve yok */}
               <div className="hero-vs-badge-wrapper">
                 <span className="hero-vs-text">VS</span>
-            </div>
+              </div>
 
               {/* Blue Corner Fighter */}
               <div className="hero-fighter-wrapper right">
                 <div className="hero-fighter-card blue">
-                  {mainEvent.blueImageUrl && (
+                  {blueImgSrc && (
                     <div className="hero-fighter-image-container">
                       <img
-                        src={getProxiedImageUrl(mainEvent.blueImageUrl)}
+                        src={blueImgSrc}
                         alt={blueCorner}
                         className="hero-fighter-image"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-              </div>
+                    </div>
                   )}
                   <div className="hero-fighter-info">
                     <span className="hero-fighter-name">{blueCorner}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-          </div>
-        </div>
           )}
 
           {/* VIEW EVENT DETAILS tamamen kaldırıldı */}
+        </div>
       </div>
-    </div>
 
       {/* Styles */}
       <style>{`
@@ -491,7 +481,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
           box-shadow: 
             0 20px 60px rgba(0, 0, 0, 0.6),
             0 0 0 1px rgba(255, 255, 255, 0.05);
-}
+        }
 
         .hero-card:hover {
           box-shadow: 
@@ -552,7 +542,6 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
             transform: translateY(100px);
           }
         }
-
 
         /* CONTENT WRAPPER */
         .hero-content {
@@ -771,8 +760,6 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
           color: white;
         }
 
-        /* VIEW EVENT DETAILS CSS'i artık kullanılmıyor, istersen silebilirsin */
-
         /* RESPONSIVE TWEAKS */
         @media (max-width: 640px) {
           .hero-content {
@@ -789,6 +776,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
     </Link>
   );
 }
+
 // --- UPCOMING EVENTS ---
 
 function UpcomingEvents({ events }: { events: UfcEvent[] }) {
@@ -882,8 +870,8 @@ function UpcomingEvents({ events }: { events: UfcEvent[] }) {
                 stroke={`url(#upcomingGradient-${e.ufcId})`}
                 style={{
                   strokeWidth: 2,
-                  strokeDasharray: 1, // tam tur
-                  strokeDashoffset: 1, // başlangıçta gizli
+                  strokeDasharray: 1,
+                  strokeDashoffset: 1,
                 }}
               />
 
@@ -901,10 +889,10 @@ function UpcomingEvents({ events }: { events: UfcEvent[] }) {
                 stroke={`url(#upcomingGradient-${e.ufcId})`}
                 style={{
                   strokeWidth: 4,
-                  strokeDasharray: "0.12 1", // tam tur içinde küçük parça
+                  strokeDasharray: "0.12 1",
                   strokeDashoffset: 1,
                   strokeLinecap: "round",
-                  opacity: 0, // hover yokken görünmesin
+                  opacity: 0,
                   filter: `url(#cardBorderGlow-${e.ufcId})`,
                 }}
               />
@@ -944,7 +932,6 @@ function UpcomingEvents({ events }: { events: UfcEvent[] }) {
           }
         }
 
-        /* Hover'da animasyonu başlat */
         .group:hover .card-border-path {
           animation: drawBorder 1.8s ease-in-out forwards;
         }
@@ -959,7 +946,6 @@ function UpcomingEvents({ events }: { events: UfcEvent[] }) {
     </section>
   );
 }
-
 
 // --- CHAMPIONS ROW WITH ENHANCED EFFECTS ---
 
@@ -976,17 +962,16 @@ function ChampionsRow({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
-  const scrollTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollTimeoutRef =
+    React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // İyileştirilmiş scroll pozisyon kontrolü - debounce ile
   const checkScrollPosition = React.useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = container;
-    const tolerance = 5; // Daha güvenilir tolerans değeri
+    const tolerance = 5;
 
-    // Eğer container henüz tam render olmamışsa, tekrar dene
     if (scrollWidth === 0 || clientWidth === 0) {
       setTimeout(() => checkScrollPosition(), 50);
       return;
@@ -999,7 +984,6 @@ function ChampionsRow({
     setShowRightArrow(canScrollRight);
   }, []);
 
-  // Debounced scroll handler
   const handleScroll = React.useCallback(() => {
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
@@ -1012,21 +996,18 @@ function ChampionsRow({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (container) {
-      // İlk kontrol - container render olduktan sonra bekle
       const timeoutId = setTimeout(() => {
         checkScrollPosition();
       }, 100);
-      
-      // Event listeners
+
       container.addEventListener("scroll", handleScroll, { passive: true });
       window.addEventListener("resize", checkScrollPosition);
-      
-      // ResizeObserver ile container boyut değişikliklerini izle
+
       const resizeObserver = new ResizeObserver(() => {
         checkScrollPosition();
       });
       resizeObserver.observe(container);
-      
+
       return () => {
         clearTimeout(timeoutId);
         container.removeEventListener("scroll", handleScroll);
@@ -1039,7 +1020,6 @@ function ChampionsRow({
     }
   }, [champions, checkScrollPosition, handleScroll]);
 
-  // Kart bazlı scroll - sol (1 karakter atla)
   const scrollLeft = React.useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -1047,22 +1027,19 @@ function ChampionsRow({
     const cards = Array.from(container.children) as HTMLElement[];
     if (cards.length === 0) return;
 
-    // İlk kartın genişliğini al
     const firstCard = cards[0];
     if (!firstCard) return;
-    
+
     const cardWidth = firstCard.offsetWidth;
-    const gap = 8; // gap-2 = 8px
+    const gap = 8;
     const scrollAmount = cardWidth + gap;
 
-    // Bir kart sola kaydır
     container.scrollBy({
       left: -scrollAmount,
-      behavior: 'smooth'
+      behavior: "smooth",
     });
   }, []);
 
-  // Kart bazlı scroll - sağ (1 karakter atla)
   const scrollRight = React.useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -1070,18 +1047,16 @@ function ChampionsRow({
     const cards = Array.from(container.children) as HTMLElement[];
     if (cards.length === 0) return;
 
-    // İlk kartın genişliğini al
     const firstCard = cards[0];
     if (!firstCard) return;
-    
+
     const cardWidth = firstCard.offsetWidth;
-    const gap = 8; // gap-2 = 8px
+    const gap = 8;
     const scrollAmount = cardWidth + gap;
 
-    // Bir kart sağa kaydır
     container.scrollBy({
       left: scrollAmount,
-      behavior: 'smooth'
+      behavior: "smooth",
     });
   }, []);
 
@@ -1091,11 +1066,9 @@ function ChampionsRow({
         Champions
       </h2>
 
-      {/* 🔻 Champions section highlight line with animation */}
       <div className="h-px w-full bg-gradient-to-r from-amber-500 via-zinc-700/70 to-transparent opacity-70 champion-glow-line" />
 
       <div className="flex items-center gap-3">
-        {/* Sola kaydırma – sadece showLeftArrow true iken görünsün */}
         <div className="flex-shrink-0 w-8 flex items-center justify-center">
           {showLeftArrow && (
             <button
@@ -1119,9 +1092,8 @@ function ChampionsRow({
               </svg>
             </button>
           )}
-          </div>
+        </div>
 
-        {/* Scroll container */}
         <div
           ref={scrollContainerRef}
           className="flex flex-1 gap-2 overflow-x-auto pb-1 scrollbar-hide champions-scroll-container"
@@ -1132,10 +1104,9 @@ function ChampionsRow({
         >
           {champions.map((c, index) => (
             <ChampionCard key={c.division} champion={c} index={index} />
-        ))}
-      </div>
+          ))}
+        </div>
 
-        {/* Sağa kaydırma – SADECE showRightArrow true iken görünür */}
         <div className="flex-shrink-0 w-8 flex items-center justify-center">
           {showRightArrow && (
             <button
@@ -1159,10 +1130,9 @@ function ChampionsRow({
               </svg>
             </button>
           )}
-          </div>
+        </div>
       </div>
 
-      {/* Enhanced Styles */}
       <style>{`
         @keyframes championGlowPulse {
           0%, 100% {
@@ -1204,7 +1174,6 @@ function ChampionCard({
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = React.useState({ x: 0, y: 0 });
 
-  // 3D tilt effect based on mouse position
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRef.current) return;
     const rect = cardRef.current.getBoundingClientRect();
@@ -1217,14 +1186,13 @@ function ChampionCard({
     setMousePos({ x: 0.5, y: 0.5 });
   };
 
-  // Calculate transform based on mouse position
-  const tiltX = (mousePos.y - 0.5) * -10; // -5 to 5 degrees
+  const tiltX = (mousePos.y - 0.5) * -10;
   const tiltY = (mousePos.x - 0.5) * 10;
   const glowX = mousePos.x * 100;
   const glowY = mousePos.y * 100;
 
   return (
-        <Link
+    <Link
       to={champion.externalId ? `/fighters/${champion.externalId}` : "/fighters"}
       className="champion-card-wrapper"
       style={{ animationDelay: `${index * 0.1}s` }}
@@ -1238,10 +1206,8 @@ function ChampionCard({
           transform: `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`,
         }}
       >
-        {/* Animated border - Golden octagon */}
         <div className="champion-border" />
-        
-        {/* Radial glow that follows mouse */}
+
         <div
           className="champion-glow"
           style={{
@@ -1249,48 +1215,40 @@ function ChampionCard({
           }}
         />
 
-        {/* Spotlight effect */}
         <div className="champion-spotlight" />
 
-        {/* Image container */}
         <div className="champion-image-container">
           {champion.imageUrl ? (
-                <img
+            <img
               src={champion.imageUrl}
               alt={champion.champion}
               className="champion-image"
-                />
-              ) : (
+            />
+          ) : (
             <div className="champion-placeholder">
-                  <span className="text-lg font-semibold text-slate-200">
+              <span className="text-lg font-semibold text-slate-200">
                 {getInitials(champion.champion)}
-                  </span>
-                </div>
-              )}
-          
-          {/* Belt shine effect overlay */}
+              </span>
+            </div>
+          )}
+
           <div className="champion-belt-shine" />
         </div>
 
-        {/* Info section */}
         <div className="champion-info">
           <p className="champion-division">{champion.division}</p>
           <p className="champion-name">
             <span className="champion-name-text">{champion.champion}</span>
-                </p>
-            </div>
+          </p>
+        </div>
+      </div>
 
-            </div>
-
-      {/* Advanced Styles for Champion Card */}
       <style>{`
-        /* Scroll container with snap */
         .champions-scroll-container {
           scroll-snap-type: x mandatory;
           scroll-padding: 0 8px;
         }
 
-        /* Card wrapper with fade-in animation */
         .champion-card-wrapper {
           display: block;
           flex-shrink: 0;
@@ -1327,7 +1285,6 @@ function ChampionCard({
           }
         }
 
-        /* Main card */
         .champion-card {
           position: relative;
           overflow: hidden;
@@ -1345,7 +1302,6 @@ function ChampionCard({
             inset 0 0 20px rgba(245, 158, 11, 0.05);
         }
 
-        /* Animated golden border */
         .champion-border {
           position: absolute;
           inset: 0;
@@ -1385,7 +1341,6 @@ function ChampionCard({
           }
         }
 
-        /* Radial glow effect */
         .champion-glow {
           position: absolute;
           inset: 0;
@@ -1399,7 +1354,6 @@ function ChampionCard({
           opacity: 1;
         }
 
-        /* Spotlight effect */
         .champion-spotlight {
           position: absolute;
           top: -50%;
@@ -1430,7 +1384,6 @@ function ChampionCard({
           }
         }
 
-        /* Image container */
         .champion-image-container {
           position: relative;
           display: flex;
@@ -1442,7 +1395,6 @@ function ChampionCard({
           background: transparent;
         }
 
-        /* Champion image */
         .champion-image {
           height: 100%;
           width: 100%;
@@ -1457,7 +1409,6 @@ function ChampionCard({
           filter: brightness(1.1) contrast(1.1) saturate(1.2);
         }
 
-        /* Placeholder for missing images */
         .champion-placeholder {
           display: flex;
           height: 100%;
@@ -1467,7 +1418,6 @@ function ChampionCard({
           background: transparent;
         }
 
-        /* Belt shine effect */
         .champion-belt-shine {
           position: absolute;
           top: 0;
@@ -1502,7 +1452,6 @@ function ChampionCard({
           }
         }
 
-        /* Info section */
         .champion-info {
           position: relative;
           padding: 0.75rem 1rem;
@@ -1512,7 +1461,6 @@ function ChampionCard({
           z-index: 10;
         }
 
-        /* Division text */
         .champion-division {
           font-size: 0.625rem;
           color: #f59e0b;
@@ -1521,7 +1469,6 @@ function ChampionCard({
           margin-bottom: 0.25rem;
         }
 
-        /* Champion name */
         .champion-name {
           font-size: 0.75rem;
           font-weight: 600;
@@ -1535,7 +1482,6 @@ function ChampionCard({
           color: #f59e0b;
         }
 
-        /* Name text with shine effect */
         .champion-name-text {
           position: relative;
           display: inline-block;
@@ -1574,12 +1520,10 @@ function ChampionCard({
             opacity: 0;
           }
         }
-
       `}</style>
-          </Link>
+    </Link>
   );
 }
-
 
 // İsimden baş harf üretmek için
 function getInitials(name: string) {
