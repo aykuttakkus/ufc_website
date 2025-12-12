@@ -17,7 +17,6 @@ const app = express();
 app.use(express.json());
 
 // 🔹 CORS
-// Şimdilik herkese izin veriyoruz, canlıya geçince origin listesi ekleyebilirsin.
 app.use(
   cors({
     origin: "*",
@@ -52,7 +51,7 @@ app.use("/api/auth", authRoutes);
 // Swagger routes
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Event details routes (tek event + fights)
+// Event details routes (tek event + fights + proxy-image)
 app.use("/api/ufc", eventDetailsRoutes);
 
 // 🔹 SERVER START
@@ -66,7 +65,7 @@ const start = async () => {
     });
   } catch (err) {
     console.error("❌ Failed to start server:", err);
-    process.exit(1); // DB bağlanamazsa uygulamayı kapat
+    process.exit(1);
   }
 };
 

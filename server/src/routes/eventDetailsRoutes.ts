@@ -94,7 +94,7 @@ router.post("/events/refresh-past", refreshPastEventsDetails);
  * @openapi
  * /proxy-image:
  *   get:
- *     summary: Proxy image requests to bypass CORS restrictions
+ *     summary: Proxy image requests to bypass CORS / hotlink restrictions
  *     tags:
  *       - Events
  *     parameters:
@@ -103,7 +103,7 @@ router.post("/events/refresh-past", refreshPastEventsDetails);
  *         required: true
  *         schema:
  *           type: string
- *         description: Image URL to proxy
+ *         description: Encoded image URL to proxy
  *     responses:
  *       200:
  *         description: Image data
@@ -114,35 +114,38 @@ router.post("/events/refresh-past", refreshPastEventsDetails);
  */
 router.get("/proxy-image", async (req: Request, res: Response) => {
   try {
-    const { url } = req.query;
+    const rawUrl = req.query.url;
 
-    if (!url || typeof url !== "string") {
-      return res.status(400).json({ error: "URL required" });
+    if (!rawUrl || typeof rawUrl !== "string") {
+      return res.status(400).json({ error: "url query parameter is required" });
     }
 
-    // URL decode
-    const imageUrl = decodeURIComponent(url);
+    // Frontend'den encoded geldiyse çözüyoruz
+    const imageUrl = decodeURIComponent(rawUrl);
 
     const response = await axios.get(imageUrl, {
       responseType: "arraybuffer",
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-        "Referer": "https://www.ufc.com/",
-        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        Referer: "https://www.ufc.com/",
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
       },
       timeout: 10000,
       maxRedirects: 5,
     });
 
-    // Content-Type'ı koru
     const contentType = response.headers["content-type"] || "image/jpeg";
-    res.set("Content-Type", contentType);
-    res.set("Cache-Control", "public, max-age=86400"); // 24 saat cache
-    res.set("Access-Control-Allow-Origin", "*"); // CORS için
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400"); // 24 saat cache
+
+    // CORS zaten global cors() ile açık ama ekstra istersen:
+    // res.setHeader("Access-Control-Allow-Origin", "*");
 
     res.send(response.data);
-  } catch (error: any) {
+  } catch (error) {
+    console.error("🔥 proxy-image error:", error);
     res.status(500).json({ error: "Failed to fetch image" });
   }
 });
