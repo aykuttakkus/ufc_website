@@ -117,11 +117,32 @@ router.get("/proxy-image", async (req: Request, res: Response) => {
     const rawUrl = req.query.url;
 
     if (!rawUrl || typeof rawUrl !== "string") {
-      return res.status(400).json({ error: "url query parameter is required" });
+      return res
+        .status(400)
+        .json({ error: "url query parameter is required" });
     }
 
-    // Frontend'den encoded geldiyse çözüyoruz
-    const imageUrl = decodeURIComponent(rawUrl);
+    // 1️⃣ URL decode (bozuksa patlatma)
+    let imageUrl = rawUrl;
+    try {
+      imageUrl = decodeURIComponent(rawUrl);
+    } catch {
+      // ignore decode error
+    }
+
+    // 2️⃣ ufc.com → www.ufc.com normalize
+    if (imageUrl.startsWith("http://ufc.com")) {
+      imageUrl = imageUrl.replace("http://ufc.com", "https://www.ufc.com");
+    } else if (imageUrl.startsWith("https://ufc.com")) {
+      imageUrl = imageUrl.replace("https://ufc.com", "https://www.ufc.com");
+    }
+
+    // Sadece http/https izin ver
+    if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+      return res
+        .status(400)
+        .json({ error: "Invalid image URL", url: imageUrl });
+    }
 
     const response = await axios.get(imageUrl, {
       responseType: "arraybuffer",
@@ -138,15 +159,41 @@ router.get("/proxy-image", async (req: Request, res: Response) => {
     const contentType = response.headers["content-type"] || "image/jpeg";
 
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Cache-Control", "public, max-age=86400"); // 24 saat cache
-
-    // CORS zaten global cors() ile açık ama ekstra istersen:
-    // res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
 
     res.send(response.data);
-  } catch (error) {
-    console.error("🔥 proxy-image error:", error);
-    res.status(500).json({ error: "Failed to fetch image" });
+  } catch (error: any) {
+    console.error("🔥 proxy-image error:", error?.message || error);
+
+    if (error.response) {
+      const status = error.response.status;
+      const statusText = error.response.statusText;
+      let snippet: string | undefined;
+
+      try {
+        if (Buffer.isBuffer(error.response.data)) {
+          snippet = error.response.data.toString("utf8").slice(0, 300);
+        } else if (typeof error.response.data === "string") {
+          snippet = error.response.data.slice(0, 300);
+        } else {
+          snippet = JSON.stringify(error.response.data).slice(0, 300);
+        }
+      } catch {
+        snippet = undefined;
+      }
+
+      return res.status(500).json({
+        error: "Upstream error from UFC",
+        status,
+        statusText,
+        snippet,
+      });
+    }
+
+    return res.status(500).json({
+      error: "Failed to fetch image",
+      message: error?.message || "Unknown error",
+    });
   }
 });
 
