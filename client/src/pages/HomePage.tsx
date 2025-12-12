@@ -379,7 +379,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                   style={{ backgroundColor: colorScheme.primary }}
                 />
                 {isNext ? "NEXT" : "PAST"} {getEventTag()}
-              </span>
+                  </span>
 
               {/* Date badge */}
               <span className={`hero-date-badge ${colorScheme.badgeBg}`}>
@@ -402,7 +402,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                   year: "numeric",
                 })}
               </span>
-            </div>
+      </div>
 
             <h1 className="hero-title">
               <span className="hero-title-text">{event.name}</span>
@@ -430,18 +430,18 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-                    </div>
+              </div>
                   )}
                   <div className="hero-fighter-info">
                     <span className="hero-fighter-name">{redCorner}</span>
                   </div>
                 </div>
-              </div>
+            </div>
 
               {/* VS – sadece text, çerçeve yok */}
               <div className="hero-vs-badge-wrapper">
                 <span className="hero-vs-text">VS</span>
-              </div>
+            </div>
 
               {/* Blue Corner Fighter */}
               <div className="hero-fighter-wrapper right">
@@ -456,19 +456,19 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-                    </div>
+              </div>
                   )}
                   <div className="hero-fighter-info">
                     <span className="hero-fighter-name">{blueCorner}</span>
-                  </div>
-                </div>
-              </div>
             </div>
+          </div>
+          </div>
+        </div>
           )}
 
           {/* VIEW EVENT DETAILS tamamen kaldırıldı */}
-        </div>
       </div>
+    </div>
 
       {/* Styles */}
       <style>{`
@@ -491,7 +491,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
           box-shadow: 
             0 20px 60px rgba(0, 0, 0, 0.6),
             0 0 0 1px rgba(255, 255, 255, 0.05);
-        }
+}
 
         .hero-card:hover {
           box-shadow: 
@@ -1119,7 +1119,7 @@ function ChampionsRow({
               </svg>
             </button>
           )}
-        </div>
+          </div>
 
         {/* Scroll container */}
         <div
@@ -1132,8 +1132,8 @@ function ChampionsRow({
         >
           {champions.map((c, index) => (
             <ChampionCard key={c.division} champion={c} index={index} />
-          ))}
-        </div>
+        ))}
+      </div>
 
         {/* Sağa kaydırma – SADECE showRightArrow true iken görünür */}
         <div className="flex-shrink-0 w-8 flex items-center justify-center">
@@ -1255,7 +1255,7 @@ function ChampionCard({
         {/* Image container */}
         <div className="champion-image-container">
           {champion.imageUrl ? (
-            <img
+                <img
               src={champion.imageUrl}
               alt={champion.champion}
               className="champion-image"
@@ -1277,10 +1277,10 @@ function ChampionCard({
           <p className="champion-division">{champion.division}</p>
           <p className="champion-name">
             <span className="champion-name-text">{champion.champion}</span>
-          </p>
+                </p>
             </div>
 
-      </div>
+            </div>
 
       {/* Advanced Styles for Champion Card */}
       <style>{`
@@ -1576,7 +1576,7 @@ function ChampionCard({
         }
 
       `}</style>
-    </Link>
+          </Link>
   );
 }
 
