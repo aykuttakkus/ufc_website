@@ -31,27 +31,18 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// ✅ (Opsiyonel) daha standart kısa health URL
+app.get("/health", (_req, res) => {
+  return res.status(200).send("ok");
+});
+
 // 🔹 ROUTES
-
-// UFC Rankings routes
 app.use("/api/ufc/rankings", ufcRankingsRoutes);
-
-// Fighters routes
 app.use("/api/fighters", fighterRoutes);
-
-// UFC Events routes (liste, refresh, upcoming, past vs.)
 app.use("/api/ufc/events", ufcEventsRoutes);
-
-// Favorites routes
 app.use("/api/favorites", favoriteRoutes);
-
-// Auth routes
 app.use("/api/auth", authRoutes);
-
-// Swagger routes
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// Event details routes (tek event + fights + proxy-image)
 app.use("/api/ufc", eventDetailsRoutes);
 
 // 🔹 SERVER START
@@ -70,3 +61,12 @@ const start = async () => {
 };
 
 start();
+
+// ✅ Crash guard (özellikle scraping gibi yerlerde kritik)
+process.on("unhandledRejection", (reason) => {
+  console.error("🔥 unhandledRejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("🔥 uncaughtException:", err);
+});
