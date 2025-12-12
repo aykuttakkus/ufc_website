@@ -1,4 +1,4 @@
-// src/routes/eventDetailsRoutes.ts
+// server/src/routes/eventDetailsRoutes.ts
 import { Router, Request, Response } from "express";
 import axios from "axios";
 import {
@@ -9,6 +9,23 @@ import {
 } from "../controllers/eventDetailsController";
 
 const router = Router();
+
+/**
+ * Scraping (UFC upstream call) kapalı mı?
+ * Render/prod'da genelde DISABLE_UFC_SCRAPING=true yapıp
+ * refresh'i localde çalıştırıyoruz.
+ */
+function scrapingDisabled() {
+  return String(process.env.DISABLE_UFC_SCRAPING || "").toLowerCase() === "true";
+}
+
+function denyIfDisabled(res: Response) {
+  return res.status(403).json({
+    success: false,
+    message:
+      "UFC upstream calls are disabled on this environment (DISABLE_UFC_SCRAPING=true). Run refresh/proxy locally.",
+  });
+}
 
 /**
  * @openapi
@@ -109,20 +126,23 @@ router.post("/events/refresh-past", refreshPastEventsDetails);
  *         description: Image data
  *       400:
  *         description: URL parameter missing
+ *       403:
+ *         description: Proxy disabled on this environment
  *       500:
  *         description: Failed to fetch image
  */
 router.get("/proxy-image", async (req: Request, res: Response) => {
   try {
+    // Render/prod'da UFC upstream'ı komple kapatmak istiyorsan
+    if (scrapingDisabled()) return denyIfDisabled(res);
+
     const rawUrl = req.query.url;
 
     if (!rawUrl || typeof rawUrl !== "string") {
-      return res
-        .status(400)
-        .json({ error: "url query parameter is required" });
+      return res.status(400).json({ error: "url query parameter is required" });
     }
 
-    // 1️⃣ URL decode (bozuksa patlatma)
+    // 1) URL decode (bozuksa patlatma)
     let imageUrl = rawUrl;
     try {
       imageUrl = decodeURIComponent(rawUrl);
@@ -130,18 +150,33 @@ router.get("/proxy-image", async (req: Request, res: Response) => {
       // ignore decode error
     }
 
-    // 2️⃣ ufc.com → www.ufc.com normalize
+    // 2) ufc.com -> www.ufc.com normalize
     if (imageUrl.startsWith("http://ufc.com")) {
       imageUrl = imageUrl.replace("http://ufc.com", "https://www.ufc.com");
     } else if (imageUrl.startsWith("https://ufc.com")) {
       imageUrl = imageUrl.replace("https://ufc.com", "https://www.ufc.com");
     }
 
-    // Sadece http/https izin ver
+    // 3) Sadece http/https izin ver
     if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
-      return res
-        .status(400)
-        .json({ error: "Invalid image URL", url: imageUrl });
+      return res.status(400).json({ error: "Invalid image URL", url: imageUrl });
+    }
+
+    // 4) SSRF koruması: sadece ufc.com domaini izinli
+    let parsed: URL;
+    try {
+      parsed = new URL(imageUrl);
+    } catch {
+      return res.status(400).json({ error: "Invalid URL format", url: imageUrl });
+    }
+
+    const host = (parsed.hostname || "").toLowerCase();
+    const isAllowedHost = host === "ufc.com" || host.endsWith(".ufc.com");
+    if (!isAllowedHost) {
+      return res.status(400).json({
+        error: "Blocked host. Only ufc.com domains are allowed.",
+        host,
+      });
     }
 
     const response = await axios.get(imageUrl, {
@@ -154,14 +189,37 @@ router.get("/proxy-image", async (req: Request, res: Response) => {
       },
       timeout: 10000,
       maxRedirects: 5,
+      validateStatus: () => true, // upstream status'u biz handle edeceğiz
     });
 
-    const contentType = response.headers["content-type"] || "image/jpeg";
+    // Upstream 2xx değilse düzgün hata döndür
+    if (response.status < 200 || response.status >= 300) {
+      let snippet: string | undefined;
+      try {
+        if (Buffer.isBuffer(response.data)) {
+          snippet = response.data.toString("utf8").slice(0, 300);
+        } else if (typeof response.data === "string") {
+          snippet = response.data.slice(0, 300);
+        } else {
+          snippet = JSON.stringify(response.data).slice(0, 300);
+        }
+      } catch {
+        snippet = undefined;
+      }
 
+      return res.status(502).json({
+        error: "Upstream error from UFC",
+        status: response.status,
+        statusText: response.statusText,
+        snippet,
+      });
+    }
+
+    const contentType = response.headers["content-type"] || "image/jpeg";
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=86400");
 
-    res.send(response.data);
+    return res.send(response.data);
   } catch (error: any) {
     console.error("🔥 proxy-image error:", error?.message || error);
 

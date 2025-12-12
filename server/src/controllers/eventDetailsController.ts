@@ -1,4 +1,4 @@
-// src/controllers/eventDetailsController.ts
+// server/src/controllers/eventDetailsController.ts
 import { Request, Response } from "express";
 import {
   refreshEventDetailsInDb,
@@ -6,8 +6,19 @@ import {
 } from "../services/ufcEventsDetail";
 import { UfcEvent } from "../models/UfcEvent";
 
-// Küçük delay helper'ı – UFC'yi spamlememek için
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+function scrapingDisabled() {
+  return String(process.env.DISABLE_UFC_SCRAPING || "").toLowerCase() === "true";
+}
+
+function denyIfDisabled(res: Response) {
+  return res.status(403).json({
+    success: false,
+    message:
+      "Scraping is disabled in this environment. Run refresh locally with DISABLE_UFC_SCRAPING=false (enable scraping locally). Keep DISABLE_UFC_SCRAPING=true on Render.",
+  });
+}
 
 /**
  * GET /api/ufc/events/:ufcId
@@ -38,7 +49,7 @@ export async function getEventById(req: Request, res: Response) {
       data: event,
     });
   } catch (err: any) {
-    console.error("[getEventById] error:", err.message);
+    console.error("[getEventById] error:", err?.message || err);
     return res.status(500).json({
       success: false,
       message: "Failed to load event",
@@ -48,10 +59,12 @@ export async function getEventById(req: Request, res: Response) {
 
 /**
  * POST /api/ufc/events/:ufcId/refresh-details
- * → UFC web sayfasından fight card scrape eder, DB'yi günceller, güncel dokümanı döner
+ * → UFC web sayfasından fight card scrape eder, DB'yi günceller
  */
 export async function refreshEventDetails(req: Request, res: Response) {
   try {
+    if (scrapingDisabled()) return denyIfDisabled(res);
+
     const { ufcId } = req.params;
 
     if (!ufcId) {
@@ -68,9 +81,9 @@ export async function refreshEventDetails(req: Request, res: Response) {
       data: updated,
     });
   } catch (err: any) {
-    console.error("[refreshEventDetails] error:", err.message);
+    console.error("[refreshEventDetails] error:", err?.message || err);
 
-    if (err.message === "Event not found in DB") {
+    if (err?.message === "Event not found in DB") {
       return res.status(404).json({
         success: false,
         message: "Event not found in DB",
@@ -86,11 +99,12 @@ export async function refreshEventDetails(req: Request, res: Response) {
 
 /**
  * POST /api/ufc/events/refresh-all
- * → DB'deki TÜM event’ler (past + upcoming) için UFC web sayfasından detayları yeniler.
- *   (Yumuşak mod: her event arası küçük delay ile)
+ * → DB'deki TÜM event’ler için UFC web sayfasından detayları yeniler.
  */
 export async function refreshAllEventsDetails(req: Request, res: Response) {
   try {
+    if (scrapingDisabled()) return denyIfDisabled(res);
+
     const events = await UfcEvent.find({});
 
     if (!events.length) {
@@ -110,24 +124,19 @@ export async function refreshAllEventsDetails(req: Request, res: Response) {
     for (const ev of events) {
       try {
         console.log("[refreshAllEventsDetails] Updating:", ev.ufcId);
-
         await refreshEventDetailsInDb(ev.ufcId);
         result.updatedCount += 1;
-
-        // UFC'yi çok sık sık dürtmemek için ufak bekleme
         await sleep(800);
       } catch (err: any) {
         console.error(
           `[refreshAllEventsDetails] Failed for ${ev.ufcId}:`,
-          err.message
+          err?.message || err
         );
         result.failedCount += 1;
         result.errors.push({
           ufcId: ev.ufcId,
-          error: err.message || "Unknown error",
+          error: err?.message || "Unknown error",
         });
-
-        // Arka arkaya 403 yememek için biraz daha uzun bekle
         await sleep(1000);
       }
     }
@@ -137,7 +146,7 @@ export async function refreshAllEventsDetails(req: Request, res: Response) {
       data: result,
     });
   } catch (err: any) {
-    console.error("[refreshAllEventsDetails] error:", err.message);
+    console.error("[refreshAllEventsDetails] error:", err?.message || err);
     return res.status(500).json({
       success: false,
       message: "Failed to refresh all events",
@@ -147,12 +156,12 @@ export async function refreshAllEventsDetails(req: Request, res: Response) {
 
 /**
  * POST /api/ufc/events/refresh-past
- * → SADECE PAST event’leri (isUpcoming === false) UFC web sayfasından yeniler.
- *   (Yumuşak mod: her event arası küçük delay ile)
+ * → SADECE past event’leri (isUpcoming === false) UFC web sayfasından yeniler.
  */
 export async function refreshPastEventsDetails(req: Request, res: Response) {
   try {
-    // Past event kriteri: isUpcoming === false
+    if (scrapingDisabled()) return denyIfDisabled(res);
+
     const events = await UfcEvent.find({ isUpcoming: false });
 
     if (!events.length) {
@@ -172,22 +181,19 @@ export async function refreshPastEventsDetails(req: Request, res: Response) {
     for (const ev of events) {
       try {
         console.log("[refreshPastEventsDetails] Updating:", ev.ufcId);
-
         await refreshEventDetailsInDb(ev.ufcId);
         result.updatedCount += 1;
-
         await sleep(800);
       } catch (err: any) {
         console.error(
           `[refreshPastEventsDetails] Failed for ${ev.ufcId}:`,
-          err.message
+          err?.message || err
         );
         result.failedCount += 1;
         result.errors.push({
           ufcId: ev.ufcId,
-          error: err.message || "Unknown error",
+          error: err?.message || "Unknown error",
         });
-
         await sleep(1000);
       }
     }
@@ -197,7 +203,7 @@ export async function refreshPastEventsDetails(req: Request, res: Response) {
       data: result,
     });
   } catch (err: any) {
-    console.error("[refreshPastEventsDetails] error:", err.message);
+    console.error("[refreshPastEventsDetails] error:", err?.message || err);
     return res.status(500).json({
       success: false,
       message: "Failed to refresh past events",

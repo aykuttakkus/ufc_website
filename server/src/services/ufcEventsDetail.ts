@@ -7,7 +7,7 @@ import {
   CardSection,
   WinnerSide,
 } from "../models/UfcEvent";
-import { fetchUfcHtml } from "../clients/Client"; // 👈 yeni client import'u
+import { fetchUfcHtml } from "../clients/Client"; // ✅ Linux case-sensitive: client.ts ise böyle olmalı
 
 // Köşe için asla gerçek isim olmayacak string / pattern’ler
 const BAD_CORNER_PATTERNS = [
@@ -18,20 +18,85 @@ const BAD_CORNER_PATTERNS = [
   "corner image",
 ];
 
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+function isScrapingDisabled() {
+  return String(process.env.DISABLE_UFC_SCRAPING || "").toLowerCase() === "true";
+}
+
+/**
+ * Soft retry (403/429 vs. için) - en olası çözüm: yumuşak retry + backoff
+ * Not: UFC bazen Cloudflare/WAF yüzünden 403 döndürebilir.
+ */
+async function fetchHtmlWithRetry(
+  path: string,
+  opts?: { attempts?: number; baseDelayMs?: number }
+): Promise<string> {
+  const attempts = opts?.attempts ?? 3;
+  const baseDelayMs = opts?.baseDelayMs ?? 700;
+
+  let lastErr: any;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const html = await fetchUfcHtml(path);
+
+      // Bazı durumlarda body içinde “Access denied” vb. dönebiliyor.
+      const lower = (html || "").toLowerCase();
+      if (
+        lower.includes("access denied") ||
+        lower.includes("request blocked") ||
+        lower.includes("forbidden") ||
+        lower.includes("error 403")
+      ) {
+        throw new Error("UFC responded with an access denied page (403-like).");
+      }
+
+      return html;
+    } catch (err: any) {
+      lastErr = err;
+
+      const msg = String(err?.message || err);
+      const looksLike403 =
+        msg.includes("403") || msg.toLowerCase().includes("forbidden");
+      const looksLike429 =
+        msg.includes("429") || msg.toLowerCase().includes("too many");
+
+      // Eğer son denemeyse direkt fırlat
+      if (i === attempts - 1) break;
+
+      // Backoff + jitter
+      const jitter = Math.floor(Math.random() * 250);
+      const delay =
+        baseDelayMs * Math.pow(2, i) +
+        jitter +
+        (looksLike403 ? 500 : 0) +
+        (looksLike429 ? 1200 : 0);
+
+      console.warn(
+        `[fetchHtmlWithRetry] attempt ${i + 1}/${attempts} failed for ${path}: ${msg}. Retrying in ${delay}ms`
+      );
+
+      await sleep(delay);
+    }
+  }
+
+  throw new Error(
+    `[fetchHtmlWithRetry] Failed after retries for ${path}: ${
+      String(lastErr?.message || lastErr) || "Unknown error"
+    }`
+  );
+}
+
 /**
  * alt text içindeki "…image" kısmını at, sonrasını isim olarak kullanmaya çalış.
- * Örn:
- *  "Men's full body silhouette image Neil Magny" → "Neil Magny"
- *  "Men's full body silhouette image"           → "" (isim yok)
  */
 function cleanAlt(raw?: string | null): string {
   if (!raw) return "";
 
-  // Tek satır, ekstra boşlukları kırp
   let alt = raw.replace(/\s+/g, " ").trim();
   if (!alt) return "";
 
-  // Gürültü ifadeleri (yön, poz, gövde, “image” vb.)
   const NOISE_PATTERNS = [
     /facing\s+(left|right)/gi,
     /standing/gi,
@@ -44,7 +109,6 @@ function cleanAlt(raw?: string | null): string {
     /image/gi,
     /photo/gi,
     /picture/gi,
-    // Sık görülen siklet kelimelerini de temizle
     /middleweight/gi,
     /lightweight/gi,
     /heavyweight/gi,
@@ -59,7 +123,6 @@ function cleanAlt(raw?: string | null): string {
     alt = alt.replace(pat, " ");
   });
 
-  // Sadece harf, boşluk, apostrof ve tire kalsın
   alt = alt.replace(/[^a-zA-Z\s'’-]/g, " ").replace(/\s+/g, " ").trim();
   if (!alt) return "";
 
@@ -72,8 +135,6 @@ function sanitizeFighterName(raw: string | undefined | null): string {
   if (!t) return "";
 
   const lower = t.toLowerCase();
-
-  // Bu pattern'lerden biri geçiyorsa, bu gerçek isim değildir → boş dön
   if (BAD_CORNER_PATTERNS.some((p) => lower.includes(p))) {
     return "";
   }
@@ -85,10 +146,8 @@ function normalizeWeightClass(raw?: string | null): string {
   if (!raw) return "";
   let t = raw.replace(/\s+/g, " ").trim();
 
-  // "#3 Flyweight Bout #6" → "Flyweight Bout"
   t = t.replace(/#\d+/g, "").replace(/\s+/g, " ").trim();
 
-  // "Middleweight Bout Middleweight Bout" gibi tekrarları temizle
   const mid = Math.floor(t.length / 2);
   const first = t.slice(0, mid).trim();
   const second = t.slice(mid).trim();
@@ -97,25 +156,17 @@ function normalizeWeightClass(raw?: string | null): string {
   return t;
 }
 
-/**
- * Relative veya absolute URL'yi normalize et
- * Relative URL'ler için base URL ekle (Safari uyumluluğu için)
- */
 function normalizeImageUrl(url: string | undefined | null): string | undefined {
   if (!url) return undefined;
 
-  // Zaten tam URL ise (http:// veya https:// ile başlıyorsa) olduğu gibi dön
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url;
   }
 
-  // Relative URL ise base URL ekle
-  // Eğer / ile başlıyorsa root-relative, değilse current path-relative
   if (url.startsWith("/")) {
     return `https://www.ufc.com${url}`;
   }
 
-  // Current path-relative için de base URL ekle
   return `https://www.ufc.com/${url}`;
 }
 
@@ -136,9 +187,6 @@ const SECTION_MAPPERS: { regex: RegExp; value: CardSection }[] = [
   { regex: /prelims?/i, value: "Prelims" },
 ];
 
-/**
- * DOM içindeki bir heading node'un text’ine göre card section belirle.
- */
 function detectSectionFromHeading(text: string): CardSection {
   const t = text.trim();
   for (const m of SECTION_MAPPERS) {
@@ -147,9 +195,6 @@ function detectSectionFromHeading(text: string): CardSection {
   return "Unknown";
 }
 
-/**
- * Flag URL'den ülke kodunu çıkar (örn: .../flags/PT.PNG → PT)
- */
 function extractCountryCodeFromFlagSrc(src?: string | null): string | undefined {
   if (!src) return undefined;
   const match = src.match(/\/flags\/([^/.]+)\./i);
@@ -159,9 +204,6 @@ function extractCountryCodeFromFlagSrc(src?: string | null): string | undefined 
   return undefined;
 }
 
-/**
- * Fight node içinden ülke text + flag code çıkar.
- */
 function extractCountryInfo(
   fightNode: cheerio.Cheerio,
   side: "red" | "blue"
@@ -191,13 +233,6 @@ function extractCountryInfo(
   };
 }
 
-/**
- * Past event’ler için sonuç / ödül bilgilerini çıkar:
- * - Fight/Performance of the Night
- * - Round
- * - Method (KO/TKO, Decision, Submission)
- * - Kazanan köşe (red / blue / draw / no-contest)
- */
 function extractFightResults(
   fightNode: cheerio.Cheerio
 ): {
@@ -207,10 +242,8 @@ function extractFightResults(
   resultTime?: string;
   winnerSide?: WinnerSide;
 } {
-  // 🎖 Bonus banner: Fight of the Night / Performance of the Night
   let bonusText: string | undefined = undefined;
 
-  // 1) Standart banner selector'ları
   const bannerSelectors = [
     ".c-listing-fight__banner--award .text",
     ".c-listing-fight__banner--award span",
@@ -239,7 +272,6 @@ function extractFightResults(
     }
   }
 
-  // 2) Attribute-based arama
   if (!bonusText) {
     const attributeSelectors = [
       "[data-award]",
@@ -269,7 +301,6 @@ function extractFightResults(
     }
   }
 
-  // 3) Parent node'larda da ara
   if (!bonusText) {
     const parentNode = fightNode.parent();
     if (parentNode && parentNode.length > 0) {
@@ -290,7 +321,6 @@ function extractFightResults(
     }
   }
 
-  // 4) Tüm node içinde regex ile ara
   if (!bonusText) {
     const fightText = fightNode.text();
     const fightTextLower = fightText.toLowerCase();
@@ -321,12 +351,8 @@ function extractFightResults(
     }
   }
 
-  // 5) Normalize bonus text
   if (bonusText) {
-    const normalized = bonusText
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
+    const normalized = bonusText.replace(/\s+/g, " ").trim().toLowerCase();
     if (normalized.includes("fight of the night")) {
       bonusText = "Fight of the Night";
     } else if (
@@ -337,7 +363,6 @@ function extractFightResults(
     }
   }
 
-  // 📊 Round, Method & Time
   let resultRound: number | undefined;
   let resultMethod: string | undefined;
   let resultTime: string | undefined;
@@ -360,7 +385,7 @@ function extractFightResults(
       : fightNode.find(".c-listing-fight__result");
 
   if (resultItems && resultItems.length > 0) {
-    resultItems.each((idx, _el) => {
+    resultItems.each((idx) => {
       const node = resultItems.eq(idx);
 
       let labelElement = node.find(".c-listing-fight__result-label").first();
@@ -379,32 +404,18 @@ function extractFightResults(
         valueElement = node.find(".c-listing-fight_result-text").first();
       }
 
-      if (
-        !labelElement ||
-        !valueElement ||
-        labelElement.length === 0 ||
-        valueElement.length === 0
-      ) {
+      if (!labelElement || !valueElement || !labelElement.length || !valueElement.length) {
         return;
       }
 
-      const label = labelElement
-        .text()
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase();
-
+      const label = labelElement.text().replace(/\s+/g, " ").trim().toLowerCase();
       const valueText = valueElement.text().replace(/\s+/g, " ").trim();
 
-      if (!label || !valueText) {
-        return;
-      }
+      if (!label || !valueText) return;
 
       if (label.includes("round")) {
         const parsed = parseInt(valueText, 10);
-        if (!Number.isNaN(parsed)) {
-          resultRound = parsed;
-        }
+        if (!Number.isNaN(parsed)) resultRound = parsed;
       } else if (label.includes("method")) {
         resultMethod = valueText;
       } else if (label.includes("time")) {
@@ -413,53 +424,29 @@ function extractFightResults(
     });
   }
 
-  // 🥇 Winner side
   let winnerSide: WinnerSide | undefined;
 
-  const redCornerNode = fightNode
-    .find(".c-listing-fight__corner--red")
-    .first();
-  const blueCornerNode = fightNode
-    .find(".c-listing-fight__corner--blue")
-    .first();
+  const redCornerNode = fightNode.find(".c-listing-fight__corner--red").first();
+  const blueCornerNode = fightNode.find(".c-listing-fight__corner--blue").first();
 
-  const hasDrawOutcome =
-    fightNode.find(".c-listing-fight__outcome--draw").length > 0;
-  const hasNoContestOutcome =
-    fightNode.find(".c-listing-fight__outcome--nc").length > 0;
+  const hasDrawOutcome = fightNode.find(".c-listing-fight__outcome--draw").length > 0;
+  const hasNoContestOutcome = fightNode.find(".c-listing-fight__outcome--nc").length > 0;
 
-  const redHasWin =
-    redCornerNode.find(".c-listing-fight__outcome--win").length > 0;
-  const blueHasWin =
-    blueCornerNode.find(".c-listing-fight__outcome--win").length > 0;
+  const redHasWin = redCornerNode.find(".c-listing-fight__outcome--win").length > 0;
+  const blueHasWin = blueCornerNode.find(".c-listing-fight__outcome--win").length > 0;
 
-  if (hasDrawOutcome) {
-    winnerSide = "draw";
-  } else if (hasNoContestOutcome) {
-    winnerSide = "no-contest";
-  } else if (redHasWin && !blueHasWin) {
-    winnerSide = "red";
-  } else if (blueHasWin && !redHasWin) {
-    winnerSide = "blue";
-  }
+  if (hasDrawOutcome) winnerSide = "draw";
+  else if (hasNoContestOutcome) winnerSide = "no-contest";
+  else if (redHasWin && !blueHasWin) winnerSide = "red";
+  else if (blueHasWin && !redHasWin) winnerSide = "blue";
 
-  return {
-    fightBonus: bonusText,
-    resultRound,
-    resultMethod,
-    resultTime,
-    winnerSide,
-  };
+  return { fightBonus: bonusText, resultRound, resultMethod, resultTime, winnerSide };
 }
 
-/**
- * Köşe node'undan (red / blue) ismi çıkar.
- */
 function extractFighterNameFromCorner(
   cornerNode: cheerio.Cheerio,
   tickerNameFromFight?: string
 ): string {
-  // 0) Corner yok ama ticker'da isim varsa → direkt onu kullan
   if (!cornerNode || cornerNode.length === 0) {
     return tickerNameFromFight ? sanitizeFighterName(tickerNameFromFight) : "";
   }
@@ -473,17 +460,10 @@ function extractFighterNameFromCorner(
     .first();
 
   let raw =
-    body
-      .find(".c-listing-fight__name, .c-listing-fight__person-name")
-      .first()
-      .text() || "";
+    body.find(".c-listing-fight__name, .c-listing-fight__person-name").first().text() || "";
 
   if (!raw.trim()) {
-    raw =
-      body
-        .find("a[href*='/athlete/']")
-        .first()
-        .text() || "";
+    raw = body.find("a[href*='/athlete/']").first().text() || "";
   }
 
   if (!raw.trim()) {
@@ -498,15 +478,12 @@ function extractFighterNameFromCorner(
     const href = link.attr("href") || "";
     const slug = href.split("/").filter(Boolean).pop() || "";
     if (slug) {
-      const pretty = slug
+      raw = slug
         .split("-")
         .map((part) =>
-          part.length
-            ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-            : part
+          part.length ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part
         )
         .join(" ");
-      raw = pretty;
     }
   }
 
@@ -514,18 +491,13 @@ function extractFighterNameFromCorner(
     const text = cornerNode.text().replace(/\s+/g, " ").trim();
     if (text) {
       const tokens = text.split(" ");
-
       const filtered = tokens.filter((tok) => {
         const l = tok.toLowerCase();
         if (l === "red" || l === "blue" || l === "corner") return false;
         if (l === "record" || l === "rank" || l === "division") return false;
         return true;
       });
-
-      if (filtered.length >= 2) {
-        const candidate = filtered.slice(0, 3).join(" ");
-        raw = candidate;
-      }
+      if (filtered.length >= 2) raw = filtered.slice(0, 3).join(" ");
     }
   }
 
@@ -534,11 +506,7 @@ function extractFighterNameFromCorner(
   }
 
   const sanitized = sanitizeFighterName(raw);
-
-  if (!sanitized && tickerNameFromFight) {
-    return sanitizeFighterName(tickerNameFromFight);
-  }
-
+  if (!sanitized && tickerNameFromFight) return sanitizeFighterName(tickerNameFromFight);
   return sanitized;
 }
 
@@ -549,31 +517,27 @@ export async function scrapeUfcEventDetailsFromWeb(
   ufcId: string,
   eventNameForFallback?: string
 ): Promise<IEventFight[]> {
-  // 👇 Önceden axios ile full URL kullanıyorduk
-  // const url = `https://www.ufc.com/event/${ufcId}`;
-  // const res = await axios.get<string>(url, { ... });
+  // Guard: Render'da kapalı olsun, localde açık olsun
+  if (isScrapingDisabled()) {
+    throw new Error("Scraping is disabled (DISABLE_UFC_SCRAPING=true).");
+  }
 
-  // ✅ Artık browser-like header'lı client üzerinden path ile çekiyoruz
   const path = `/event/${ufcId}`;
-  const html = await fetchUfcHtml(path);
+
+  // ✅ Soft & yüksek olasılıklı yöntem: retry/backoff ile çek
+  const html = await fetchHtmlWithRetry(path, { attempts: 3, baseDelayMs: 700 });
 
   const $ = cheerio.load(html);
 
-  // Ana fight card container – UFC markup değişse bile birkaç class deniyoruz
   let container = $(".c-card-event--fight-card").first();
-  if (!container || container.length === 0) {
-    container = $(".view-grouping-content").first();
-  }
-  if (!container || container.length === 0) {
-    container = $(".l-page__content").first();
-  }
+  if (!container || container.length === 0) container = $(".view-grouping-content").first();
+  if (!container || container.length === 0) container = $(".l-page__content").first();
 
   const fightRoot: cheerio.Cheerio =
     container && container.length > 0 ? container : $.root();
 
   const tickerRoot: cheerio.Cheerio = $.root();
 
-  // 🔁 Ticker isimleri
   const rawTickerRedNames: string[] = [];
   const rawTickerBlueNames: string[] = [];
 
@@ -582,7 +546,7 @@ export async function scrapeUfcEventDetailsFromWeb(
       ".c-listing-ticker_fightcard_red_corner_name, " +
         ".c-listing-ticker-fightcard__red_corner_name"
     )
-    .each((i, el) => {
+    .each((_, el) => {
       const name = sanitizeFighterName($(el).text());
       rawTickerRedNames.push(name);
     });
@@ -592,7 +556,7 @@ export async function scrapeUfcEventDetailsFromWeb(
       ".c-listing-ticker_fightcard_blue_corner_name, " +
         ".c-listing-ticker-fightcard__blue_corner_name"
     )
-    .each((i, el) => {
+    .each((_, el) => {
       const name = sanitizeFighterName($(el).text());
       rawTickerBlueNames.push(name);
     });
@@ -630,9 +594,7 @@ export async function scrapeUfcEventDetailsFromWeb(
 
     if (isHeadingTag || isHeadingClass) {
       const text = node.text().trim();
-      if (text) {
-        currentSection = detectSectionFromHeading(text);
-      }
+      if (text) currentSection = detectSectionFromHeading(text);
       return;
     }
 
@@ -659,12 +621,8 @@ export async function scrapeUfcEventDetailsFromWeb(
         .first()
         .text() || "";
 
-    const redCornerNode = fightNode
-      .find(".c-listing-fight__corner--red")
-      .first();
-    const blueCornerNode = fightNode
-      .find(".c-listing-fight__corner--blue")
-      .first();
+    const redCornerNode = fightNode.find(".c-listing-fight__corner--red").first();
+    const blueCornerNode = fightNode.find(".c-listing-fight__corner--blue").first();
 
     const tickerIndex = boutOrder - 1;
     const tickerRedName = tickerRedNames[tickerIndex] || "";
@@ -673,13 +631,8 @@ export async function scrapeUfcEventDetailsFromWeb(
     let redName = extractFighterNameFromCorner(redCornerNode, tickerRedName);
     let blueName = extractFighterNameFromCorner(blueCornerNode, tickerBlueName);
 
-    if (!redName && tickerRedName) {
-      redName = tickerRedName;
-    }
-
-    if (!blueName && tickerBlueName) {
-      blueName = tickerBlueName;
-    }
+    if (!redName && tickerRedName) redName = tickerRedName;
+    if (!blueName && tickerBlueName) blueName = tickerBlueName;
 
     if (!redName && !blueName && boutOrder === 1 && eventNameForFallback) {
       const inferred = inferNamesFromEventTitle(eventNameForFallback);
@@ -687,9 +640,7 @@ export async function scrapeUfcEventDetailsFromWeb(
       if (inferred.right) blueName = inferred.right;
     }
 
-    const isRedPlaceholder = !redName;
-    const isBluePlaceholder = !blueName;
-    const isPlaceholder = isRedPlaceholder && isBluePlaceholder;
+    const isPlaceholder = !redName && !blueName;
 
     if (!redName) redName = "TBD";
     if (!blueName) blueName = "TBD";
@@ -712,11 +663,6 @@ export async function scrapeUfcEventDetailsFromWeb(
     const redCountryInfo = extractCountryInfo(fightNode, "red");
     const blueCountryInfo = extractCountryInfo(fightNode, "blue");
 
-    const redCountry = redCountryInfo.country;
-    const blueCountry = blueCountryInfo.country;
-    const redCountryCode = redCountryInfo.countryCode;
-    const blueCountryCode = blueCountryInfo.countryCode;
-
     const resultsInfo = extractFightResults(fightNode);
 
     const fight: IEventFight = {
@@ -729,10 +675,10 @@ export async function scrapeUfcEventDetailsFromWeb(
       isPlaceholder,
       redImageUrl,
       blueImageUrl,
-      redCountry,
-      blueCountry,
-      redCountryCode,
-      blueCountryCode,
+      redCountry: redCountryInfo.country,
+      blueCountry: blueCountryInfo.country,
+      redCountryCode: redCountryInfo.countryCode,
+      blueCountryCode: blueCountryInfo.countryCode,
       fightBonus: resultsInfo.fightBonus,
       resultRound: resultsInfo.resultRound,
       resultMethod: resultsInfo.resultMethod,
@@ -746,41 +692,28 @@ export async function scrapeUfcEventDetailsFromWeb(
   return fights;
 }
 
-/**
- * Hem UFC'den detay scrape eder, hem de DB'deki event dokümanını günceller.
- */
-export async function refreshEventDetailsInDb(
-  ufcId: string
-): Promise<IUfcEvent> {
-  const event = await UfcEvent.findOne({ ufcId });
-
-  if (!event) {
-    throw new Error("Event not found in DB");
+export async function refreshEventDetailsInDb(ufcId: string): Promise<IUfcEvent> {
+  if (isScrapingDisabled()) {
+    throw new Error("Scraping is disabled (DISABLE_UFC_SCRAPING=true).");
   }
+
+  const event = await UfcEvent.findOne({ ufcId });
+  if (!event) throw new Error("Event not found in DB");
 
   const fights = await scrapeUfcEventDetailsFromWeb(ufcId, event.name);
 
   event.fights = fights;
   event.lastDetailsRefreshedAt = new Date();
-
   await event.save();
 
   const savedEvent = await UfcEvent.findOne({ ufcId }).lean<IUfcEvent>().exec();
   return savedEvent || event.toObject();
 }
 
-/**
- * DB'den event + fights oku
- */
-export async function getEventWithFights(
-  ufcId: string
-): Promise<IUfcEvent | null> {
+export async function getEventWithFights(ufcId: string): Promise<IUfcEvent | null> {
   return UfcEvent.findOne({ ufcId }).lean<IUfcEvent>().exec();
 }
 
-/**
- * Bulk refresh sonuç tipi
- */
 export interface IBulkRefreshResult {
   totalEvents: number;
   updatedCount: number;
@@ -788,16 +721,15 @@ export interface IBulkRefreshResult {
   errors: { ufcId: string; error: string }[];
 }
 
-/**
- * Helper: Bulk refresh için ortak mantık
- */
 async function bulkRefreshEventDetailsInternal(
   isUpcoming: boolean,
   logPrefix: string
 ): Promise<IBulkRefreshResult> {
-  const events = await UfcEvent.find({ isUpcoming }).select(
-    "ufcId name isUpcoming"
-  );
+  if (isScrapingDisabled()) {
+    throw new Error("Scraping is disabled (DISABLE_UFC_SCRAPING=true).");
+  }
+
+  const events = await UfcEvent.find({ isUpcoming }).select("ufcId name isUpcoming");
 
   const result: IBulkRefreshResult = {
     totalEvents: events.length,
@@ -811,14 +743,11 @@ async function bulkRefreshEventDetailsInternal(
       await refreshEventDetailsInDb(ev.ufcId);
       result.updatedCount += 1;
     } catch (err: any) {
-      console.error(
-        `[${logPrefix}] Failed to refresh event ${ev.ufcId}:`,
-        err.message
-      );
+      console.error(`[${logPrefix}] Failed to refresh event ${ev.ufcId}:`, err?.message || err);
       result.failedCount += 1;
       result.errors.push({
         ufcId: ev.ufcId,
-        error: err.message || "Unknown error",
+        error: err?.message || "Unknown error",
       });
     }
   }
@@ -826,16 +755,10 @@ async function bulkRefreshEventDetailsInternal(
   return result;
 }
 
-/**
- * SADECE isUpcoming = true eventler için bulk refresh.
- */
 export async function bulkRefreshUpcomingEventDetails(): Promise<IBulkRefreshResult> {
   return bulkRefreshEventDetailsInternal(true, "BULK UPCOMING");
 }
 
-/**
- * SADECE isUpcoming = false (past) eventler için bulk refresh.
- */
 export async function bulkRefreshPastEventDetails(): Promise<IBulkRefreshResult> {
   return bulkRefreshEventDetailsInternal(false, "BULK PAST");
 }
