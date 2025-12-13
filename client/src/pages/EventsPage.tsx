@@ -127,18 +127,44 @@ export default function EventsPage() {
     setSearchParams({ tab: newTab });
   };
 
-  // Events (upcoming/past)
+  // Events (upcoming/past) - localStorage'dan oku (portfolio için sabit kalacak)
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       setLoading(true);
       setError(null);
+      
       try {
-        const data =
-          tab === "upcoming" ? await getUpcomingEvents() : await getPastEvents();
-        if (!active) return;
-        setEvents(data);
+        // localStorage key'leri
+        const UPCOMING_STORAGE_KEY = "ufc_portfolio_events_page_upcoming";
+        const PAST_STORAGE_KEY = "ufc_portfolio_events_page_past";
+        const storageKey = tab === "upcoming" ? UPCOMING_STORAGE_KEY : PAST_STORAGE_KEY;
+        
+        // localStorage'dan oku
+        const storedEvents = localStorage.getItem(storageKey);
+        
+        if (storedEvents) {
+          // localStorage'da varsa oradan kullan (API'den çekme)
+          try {
+            const parsed = JSON.parse(storedEvents);
+            if (!active) return;
+            setEvents(parsed);
+          } catch {
+            // Parse hatası varsa localStorage'ı temizle
+            localStorage.removeItem(storageKey);
+            if (!active) return;
+            setEvents([]);
+          }
+        } else {
+          // localStorage'da yoksa API'den çek ve kaydet (sadece ilk sefer)
+          const data =
+            tab === "upcoming" ? await getUpcomingEvents() : await getPastEvents();
+          if (!active) return;
+          setEvents(data);
+          // localStorage'a kaydet (portfolio için kalıcı)
+          localStorage.setItem(storageKey, JSON.stringify(data));
+        }
       } catch (err) {
         console.error("GET events error:", err);
         if (!active) return;
@@ -468,6 +494,7 @@ function EventCard({
     </Link>
   );
 }
+
 
 
 

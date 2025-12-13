@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import type { Fighter, UfcEvent, UfcDivision } from "../types";
 import {
   getUpcomingEvents,
-  getPastEvents,
   fetchEventDetail,
 } from "../api/eventsApi";
 import { getAllUfcDivisions } from "../api/rankApi";
@@ -88,6 +87,10 @@ export default function HomePage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Next event'e scroll için ref
+  const nextEventRef = React.useRef<HTMLDivElement>(null);
+  const hasScrolledToNext = React.useRef(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -95,51 +98,88 @@ export default function HomePage() {
         setLoading(true);
         setError(null);
 
-        // Paralel olarak tüm verileri yükle
-        const [eventsData, pastEventsData, rankingsData, fightersData] =
+        // Paralel olarak verileri yükle (next/past event hariç - localStorage'dan okunacak)
+        const [eventsData, rankingsData, fightersData] =
           await Promise.all([
             getUpcomingEvents(),
-            getPastEvents(),
             getAllUfcDivisions(),
             getFighters(),
           ]);
 
-        // Featured Event - İlk upcoming event
-        if (eventsData.length > 0) {
-          const firstEvent = eventsData[0];
-          // Eğer fight card detayları yoksa çek
-          if (!firstEvent.fights || firstEvent.fights.length === 0) {
-            try {
-              const eventDetail = await fetchEventDetail(firstEvent.ufcId);
-              setFeaturedEvent(eventDetail);
-            } catch {
-              // Detay yüklenemezse sadece temel bilgileri kullan
+        // Featured Event (Next Event) - localStorage'dan oku (portfolio için sabit kalacak)
+        const NEXT_EVENT_STORAGE_KEY = "ufc_portfolio_next_event";
+        const storedNextEvent = localStorage.getItem(NEXT_EVENT_STORAGE_KEY);
+        
+        if (storedNextEvent) {
+          // localStorage'da varsa oradan kullan (API'den çekme)
+          try {
+            const parsed = JSON.parse(storedNextEvent);
+            setFeaturedEvent(parsed);
+          } catch {
+            // Parse hatası varsa localStorage'ı temizle
+            localStorage.removeItem(NEXT_EVENT_STORAGE_KEY);
+          }
+        } else {
+          // localStorage'da yoksa API'den çek ve kaydet (sadece ilk sefer)
+          if (eventsData.length > 0) {
+            const firstEvent = eventsData[0];
+            // Eğer fight card detayları yoksa çek
+            if (!firstEvent.fights || firstEvent.fights.length === 0) {
+              try {
+                const eventDetail = await fetchEventDetail(firstEvent.ufcId);
+                setFeaturedEvent(eventDetail);
+                // localStorage'a kaydet (portfolio için kalıcı)
+                localStorage.setItem(NEXT_EVENT_STORAGE_KEY, JSON.stringify(eventDetail));
+              } catch {
+                // Detay yüklenemezse sadece temel bilgileri kullan ve kaydet
+                setFeaturedEvent(firstEvent);
+                localStorage.setItem(NEXT_EVENT_STORAGE_KEY, JSON.stringify(firstEvent));
+              }
+            } else {
               setFeaturedEvent(firstEvent);
+              // localStorage'a kaydet (portfolio için kalıcı)
+              localStorage.setItem(NEXT_EVENT_STORAGE_KEY, JSON.stringify(firstEvent));
             }
-          } else {
-            setFeaturedEvent(firstEvent);
           }
         }
 
-        // Past Event - İlk past event
-        if (pastEventsData.length > 0) {
-          const firstPastEvent = pastEventsData[0];
-          // Eğer fight card detayları yoksa çek
-          if (!firstPastEvent.fights || firstPastEvent.fights.length === 0) {
-            try {
-              const eventDetail = await fetchEventDetail(firstPastEvent.ufcId);
-              setPastEvent(eventDetail);
-            } catch {
-              // Detay yüklenemezse sadece temel bilgileri kullan
-              setPastEvent(firstPastEvent);
-            }
-          } else {
-            setPastEvent(firstPastEvent);
+        // Past Event - localStorage'dan oku (portfolio için sabit kalacak)
+        const PAST_EVENT_STORAGE_KEY = "ufc_portfolio_past_event";
+        const storedPastEvent = localStorage.getItem(PAST_EVENT_STORAGE_KEY);
+        
+        if (storedPastEvent) {
+          // localStorage'da varsa oradan kullan (API'den çekme)
+          try {
+            const parsed = JSON.parse(storedPastEvent);
+            setPastEvent(parsed);
+          } catch {
+            // Parse hatası varsa localStorage'ı temizle
+            localStorage.removeItem(PAST_EVENT_STORAGE_KEY);
           }
         }
+        // Past event localStorage'da yoksa hiçbir şey yapma (API'den çekme)
 
-        // Upcoming Events - İlk 3 event (featured hariç)
-        setUpcomingEvents(eventsData.slice(1, 4));
+        // Upcoming Events - localStorage'dan oku (portfolio için sabit kalacak)
+        const UPCOMING_EVENTS_STORAGE_KEY = "ufc_portfolio_upcoming_events";
+        const storedUpcomingEvents = localStorage.getItem(UPCOMING_EVENTS_STORAGE_KEY);
+        
+        if (storedUpcomingEvents) {
+          // localStorage'da varsa oradan kullan (API'den çekme)
+          try {
+            const parsed = JSON.parse(storedUpcomingEvents);
+            setUpcomingEvents(parsed);
+          } catch {
+            // Parse hatası varsa localStorage'ı temizle
+            localStorage.removeItem(UPCOMING_EVENTS_STORAGE_KEY);
+          }
+        } else {
+          // localStorage'da yoksa API'den çek ve kaydet (sadece ilk sefer)
+          // İlk 3 event (featured hariç)
+          const upcomingEventsList = eventsData.slice(1, 4);
+          setUpcomingEvents(upcomingEventsList);
+          // localStorage'a kaydet (portfolio için kalıcı)
+          localStorage.setItem(UPCOMING_EVENTS_STORAGE_KEY, JSON.stringify(upcomingEventsList));
+        }
 
         // Champions - Rankings'ten şampiyonları çıkar ve görselleri eşleştir
         // Men's ve Women's Pound for Pound'u filtrele (sadece sikletler)
@@ -199,6 +239,22 @@ export default function HomePage() {
     loadData();
   }, []);
 
+  // Next event'e otomatik scroll (sadece bir kez, sayfa yüklendiğinde)
+  useEffect(() => {
+    if (featuredEvent && nextEventRef.current && !hasScrolledToNext.current) {
+      // Kısa bir delay ile scroll yap (DOM'un tam render olması için)
+      const timer = setTimeout(() => {
+        nextEventRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        hasScrolledToNext.current = true;
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [featuredEvent]);
+
   if (loading) {
     return (
       <section className="min-h-screen bg-black px-4 py-10 text-white">
@@ -224,7 +280,11 @@ export default function HomePage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-12">
         {/* HERO – FEATURED EVENT & PAST EVENT */}
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          {featuredEvent && <HeroSection event={featuredEvent} isNext={true} />}
+          {featuredEvent && (
+            <div ref={nextEventRef}>
+              <HeroSection event={featuredEvent} isNext={true} />
+            </div>
+          )}
           {pastEvent && <HeroSection event={pastEvent} isNext={false} />}
         </div>
 
@@ -369,7 +429,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                   style={{ backgroundColor: colorScheme.primary }}
                 />
                 {isNext ? "NEXT" : "PAST"} {getEventTag()}
-              </span>
+                  </span>
 
               {/* Date badge */}
               <span className={`hero-date-badge ${colorScheme.badgeBg}`}>
@@ -392,7 +452,7 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                   year: "numeric",
                 })}
               </span>
-            </div>
+      </div>
 
             <h1 className="hero-title">
               <span className="hero-title-text">{event.name}</span>
@@ -420,18 +480,18 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-                    </div>
+              </div>
                   )}
                   <div className="hero-fighter-info">
                     <span className="hero-fighter-name">{redCorner}</span>
                   </div>
                 </div>
-              </div>
+            </div>
 
               {/* VS – sadece text, çerçeve yok */}
               <div className="hero-vs-badge-wrapper">
                 <span className="hero-vs-text">VS</span>
-              </div>
+            </div>
 
               {/* Blue Corner Fighter */}
               <div className="hero-fighter-wrapper right">
@@ -446,19 +506,19 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-                    </div>
+              </div>
                   )}
                   <div className="hero-fighter-info">
                     <span className="hero-fighter-name">{blueCorner}</span>
-                  </div>
-                </div>
-              </div>
             </div>
+          </div>
+          </div>
+        </div>
           )}
 
           {/* VIEW EVENT DETAILS tamamen kaldırıldı */}
-        </div>
       </div>
+    </div>
 
       {/* Styles */}
       <style>{`
@@ -1092,7 +1152,7 @@ function ChampionsRow({
               </svg>
             </button>
           )}
-        </div>
+          </div>
 
         <div
           ref={scrollContainerRef}
@@ -1104,8 +1164,8 @@ function ChampionsRow({
         >
           {champions.map((c, index) => (
             <ChampionCard key={c.division} champion={c} index={index} />
-          ))}
-        </div>
+        ))}
+      </div>
 
         <div className="flex-shrink-0 w-8 flex items-center justify-center">
           {showRightArrow && (
@@ -1192,7 +1252,7 @@ function ChampionCard({
   const glowY = mousePos.y * 100;
 
   return (
-    <Link
+        <Link
       to={champion.externalId ? `/fighters/${champion.externalId}` : "/fighters"}
       className="champion-card-wrapper"
       style={{ animationDelay: `${index * 0.1}s` }}
@@ -1223,14 +1283,14 @@ function ChampionCard({
               src={champion.imageUrl}
               alt={champion.champion}
               className="champion-image"
-            />
-          ) : (
+                />
+              ) : (
             <div className="champion-placeholder">
-              <span className="text-lg font-semibold text-slate-200">
+                  <span className="text-lg font-semibold text-slate-200">
                 {getInitials(champion.champion)}
-              </span>
-            </div>
-          )}
+                  </span>
+                </div>
+              )}
 
           <div className="champion-belt-shine" />
         </div>
@@ -1239,9 +1299,9 @@ function ChampionCard({
           <p className="champion-division">{champion.division}</p>
           <p className="champion-name">
             <span className="champion-name-text">{champion.champion}</span>
-          </p>
-        </div>
-      </div>
+                </p>
+              </div>
+            </div>
 
       <style>{`
         .champions-scroll-container {
@@ -1521,7 +1581,7 @@ function ChampionCard({
           }
         }
       `}</style>
-    </Link>
+          </Link>
   );
 }
 
