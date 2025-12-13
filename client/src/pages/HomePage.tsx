@@ -10,11 +10,7 @@ import {
 import { getAllUfcDivisions } from "../api/rankApi";
 import { getFighters } from "../api/fighters";
 
-// Backend base URL
-const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:5050";
-
-// Relative/tuhaf URL'leri normalize et
+// UFC görsel URL'lerini normalize et (her zaman https://www.ufc.com/... yap)
 function normalizeImageUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
 
@@ -41,22 +37,6 @@ function normalizeImageUrl(url: string | undefined): string | undefined {
 
   // Diğer durumlarda da base ekle
   return `https://www.ufc.com/${u}`;
-}
-
-// UFC görsellerini proxy üzerinden çek
-function getProxiedImageUrl(originalUrl: string | undefined): string | undefined {
-  if (!originalUrl) return undefined;
-
-  const normalized = normalizeImageUrl(originalUrl);
-  if (!normalized) return undefined;
-
-  if (normalized.includes("ufc.com")) {
-    return `${API_BASE}/api/ufc/proxy-image?url=${encodeURIComponent(
-      normalized
-    )}`;
-  }
-
-  return normalized;
 }
 
 import aspirallBelt from "../assets/champions_belt_img/ASPINALL_TOM_BELT_10-25.avif";
@@ -124,8 +104,8 @@ export default function HomePage() {
             getFighters(),
           ]);
 
-        // Featured Event - İlk upcoming event
-        if (eventsData.length > 0) {
+        // Featured Event - İlk upcoming event (sadece ilk yüklemede set et, sabit kal)
+        if (eventsData.length > 0 && !featuredEvent) {
           const firstEvent = eventsData[0];
           // Eğer fight card detayları yoksa çek
           if (!firstEvent.fights || firstEvent.fights.length === 0) {
@@ -141,8 +121,8 @@ export default function HomePage() {
           }
         }
 
-        // Past Event - İlk past event
-        if (pastEventsData.length > 0) {
+        // Past Event - İlk past event (sadece ilk yüklemede set et, sabit kal)
+        if (pastEventsData.length > 0 && !pastEvent) {
           const firstPastEvent = pastEventsData[0];
           // Eğer fight card detayları yoksa çek
           if (!firstPastEvent.fights || firstPastEvent.fights.length === 0) {
@@ -275,9 +255,9 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
   const redCorner = mainEvent?.redName || "";
   const blueCorner = mainEvent?.blueName || "";
 
-  // 🔹 Event görsellerini proxy üzerinden çek
-  const redImgSrc = getProxiedImageUrl(mainEvent?.redImageUrl);
-  const blueImgSrc = getProxiedImageUrl(mainEvent?.blueImageUrl);
+  // 🔹 Burada event görsellerini normalize ediyoruz (proxy yok)
+  const redImgSrc = normalizeImageUrl(mainEvent?.redImageUrl);
+  const blueImgSrc = normalizeImageUrl(mainEvent?.blueImageUrl);
 
   // Event tag
   const getEventTag = () => {
@@ -418,14 +398,9 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
               <span className="hero-title-text">{event.name}</span>
             </h1>
 
-            {/* Subtitle */}
-            {event.subtitle && (
+            {/* NEXT kartında subtitle yok (tarih satırı burada geliyordu) */}
+            {event.subtitle && !isNext && (
               <p className="hero-subtitle">{event.subtitle}</p>
-            )}
-
-            {/* Location */}
-            {event.location && (
-              <p className="hero-location">{event.location}</p>
             )}
           </div>
 
@@ -441,8 +416,6 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                         src={redImgSrc}
                         alt={redCorner}
                         className="hero-fighter-image"
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
@@ -469,8 +442,6 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
                         src={blueImgSrc}
                         alt={blueCorner}
                         className="hero-fighter-image"
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
@@ -683,13 +654,6 @@ function HeroSection({ event, isNext }: { event: UfcEvent; isNext: boolean }) {
           font-size: 0.9rem;
           color: rgba(255, 255, 255, 0.6);
           letter-spacing: 0.03em;
-        }
-
-        .hero-location {
-          font-size: 0.85rem;
-          color: rgba(255, 255, 255, 0.5);
-          letter-spacing: 0.05em;
-          margin-top: 0.25rem;
         }
 
         /* FIGHTERS CONTAINER */
