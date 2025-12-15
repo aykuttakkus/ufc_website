@@ -1,0 +1,964 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@200;300;400&family=Rajdhani:wght@200;300;400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* Event kartlarındaki beyaz yazılar için hover'da soldan sağa kırmızı efekt */
+.event-text-wipe {
+  position: relative;
+  display: inline-block;
+}
+
+/* Kart (Link) üstüne gelince tüm event-text-wipe yazılarında animasyon çalışsın */
+.group:hover .event-text-wipe {
+  background-image: linear-gradient(90deg, #dc2626 0%, #dc2626 100%);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  background-position: 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: event-text-wipe 0.4s ease-out forwards;
+}
+
+@keyframes event-text-wipe {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+
+/* Dikey uzatılmış metin - daha az stretch */
+.text-stretch-vertical {
+  transform: scaleY(1.08);     /* 1.3'ten 1.08'e düşürdük */
+  transform-origin: center;
+  display: inline-block;
+  line-height: 1.1;            /* daha sıkı satır aralığı */
+}
+
+/* UFC site yazı stilleri - siyah arka plan için uyarlandı - Anton font kullanılıyor (köşeli ve oturaklı) */
+.ufc-section-title {
+  font-size: 2.5rem;
+  line-height: 2.8rem;
+  color: #ffffff;
+  text-transform: uppercase;
+  font-family: 'Anton', Impact, "Arial Black", Arial, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.8rem;
+  text-align: left;
+  display: block;
+}
+
+/* DÖVÜŞÇÜ İSİMLERİ – Rajdhani (daha ince ve modern) */
+.ufc-fighter-name {
+  font-family: 'Rajdhani', 'Barlow Condensed', 'Anton', Impact, "Arial Black", Arial, sans-serif !important;
+  font-weight: 400 !important;            /* Biraz kalınlaştırıldı (200 → 400) */
+  font-size: 1.3rem;          /* Küçültüldü (1.5rem → 1.3rem) */
+  line-height: 1.2;
+  letter-spacing: 0.05em;      /* Biraz daha açık */
+  text-transform: none;        /* Küçük-büyük harf normal kalsın */
+}
+
+/* Dikey stretch'i de biraz azaltalım ki daha az şişkin dursun */
+.text-stretch-vertical {
+  transform: scaleY(1.03);     /* 1.3 → 1.08 → 1.03 gibi daha doğal bir değer */
+  transform-origin: center;
+  display: inline-block;
+  line-height: 1.1;
+}
+
+/* Diğerleri aynı kalabilir */
+.ufc-weight-class {
+  font-size: 0.95rem;
+  line-height: 1.1rem;
+  color: #abadb1;
+  text-transform: uppercase;
+  font-family: 'Rajdhani', 'Barlow Condensed', 'Anton', Impact, "Arial Black", Arial, sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+.ufc-vs-text {
+  font-size: 1.1rem;
+  line-height: 1.3rem;
+  color: #abadb1;
+  text-transform: uppercase;
+  font-family: 'Anton', Impact, "Arial Black", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+/* 🟢 Fighter country text (görsel altındaki ülke ismi) */
+.ufc-country-text {
+  font-family: 'Barlow Condensed', system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    sans-serif;
+  font-size: 0.9rem;          /* Daha büyük */
+  font-weight: 400;            /* 300 → 400: daha kalın */
+  letter-spacing: 0.08em;      /* hafif aralıklı */
+  text-transform: uppercase;   /* COUNTRY */
+  line-height: 1.25;
+  color: rgb(148 163 184);     /* slate-400 */       /* 🟨 görselle araya boşluk */
+}
+
+/* Scrollbar gizleme */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+/* Border draw animation - Upcoming Events cards */
+@keyframes drawBorder {
+  from {
+    stroke-dashoffset: 800;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Main border path */
+.card-border-path {
+  stroke: #dc2626;
+  stroke-width: 2;
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800; /* başlangıçta tamamen gizli */
+}
+
+/* Glow effect on the drawing tip */
+.card-border-glow-path {
+  stroke: #ef4444;
+  stroke-width: 4;
+  stroke-dasharray: 30 770;
+  stroke-dashoffset: 800;
+  stroke-linecap: round;
+  opacity: 0; /* hover yokken görünmesin */
+}
+
+/* Hover state - animasyonu sadece hover'da başlat */
+.group:hover .card-border-path {
+  animation: drawBorder 1.5s ease-in-out forwards;
+}
+
+.group:hover .card-border-glow-path {
+  animation:
+    drawBorder 1.5s ease-in-out forwards,
+    glowPulse 1s ease-in-out infinite;
+  opacity: 0.8;
+}
+
+/* ============================================
+   HOMEPAGE EFFECTS - Skeleton Loading Styles
+   ============================================ */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes skeleton-shine {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.skeleton-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.5rem;
+}
+
+.skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  background-size: 1000px 100%;
+  animation: skeleton-shimmer 2s infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.skeleton-item {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-item::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  animation: skeleton-shine 2s infinite;
+}
+
+.skeleton-champion-card {
+  width: calc((100% - 16px) / 5);
+  min-width: 150px;
+  max-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .skeleton-champion-card {
+    width: calc((100% - 8px) / 3);
+    min-width: 140px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .skeleton-champion-card {
+    width: calc((100% - 16px) / 5);
+    min-width: 150px;
+    max-width: 200px;
+  }
+}
+
+/* ============================================
+   HOMEPAGE EFFECTS - Hero Section Styles
+   ============================================ */
+
+.hero-card-wrapper {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 10px;
+  margin: -10px;
+}
+
+.hero-flip-scene {
+  perspective: 1400px;
+  perspective-origin: center center;
+}
+
+.hero-flip-card {
+  position: relative;
+  min-height: 440px;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  transition: transform 0.75s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+/* Hover state - daha stabil için transition delay ekle */
+.hero-card-wrapper:hover .hero-flip-card {
+  transform: rotateY(180deg);
+  transition: transform 0.75s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover'dan çıkarken daha hızlı dön */
+.hero-card-wrapper:not(:hover) .hero-flip-card {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hero-card-wrapper:focus-within .hero-flip-card {
+  transform: rotateY(180deg);
+}
+
+.hero-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  background: #000000;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.hero-back {
+  transform: rotateY(180deg);
+}
+
+.hero-static-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.5rem;
+  padding: 2px;
+  background: transparent;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.hero-content {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem;
+  z-index: 10;
+}
+
+.hero-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.hero-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: heroBadgePulse 2s ease-in-out infinite;
+}
+
+@keyframes heroBadgePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.2); }
+}
+
+.hero-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hero-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: white;
+  line-height: 1.15;
+}
+
+@media (min-width: 640px) {
+  .hero-title { font-size: 3rem; }
+}
+
+.hero-fighters-container {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1.5rem;
+  align-items: center;
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .hero-fighters-container {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
+.hero-fighter-wrapper { display: flex; }
+.hero-fighter-wrapper.left { justify-content: flex-end; }
+.hero-fighter-wrapper.right { justify-content: flex-start; }
+
+.hero-fighter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.hero-fighter-image-container {
+  width: 160px;
+  height: 160px;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+}
+
+@media (min-width: 640px) {
+  .hero-fighter-image-container { width: 200px; height: 200px; }
+}
+
+.hero-fighter-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  filter: brightness(0.95) contrast(1.1);
+}
+
+.hero-fighter-info {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.7rem;
+}
+
+.hero-fighter-name {
+  display: block;
+  color: white;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.hero-vs-badge-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-vs-text {
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  color: white;
+}
+
+/* BACK */
+.hero-back-content {
+  position: relative;
+  z-index: 10;
+  height: 100%;
+  padding: 1.75rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 1rem;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .hero-back-content {
+    grid-template-columns: 1fr;
+    align-items: center;
+    gap: 1.25rem;
+  }
+}
+
+.hero-back-fighter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: end;
+  height: 100%;
+  min-height: 360px;
+  gap: 0;
+}
+
+.hero-back-fighter-img {
+  width: 100%;
+  height: 320px;
+  object-fit: contain;
+  object-position: bottom;
+  filter: brightness(1.05) contrast(1.12);
+  flex-shrink: 0;
+}
+
+.hero-back-name {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.95);
+  text-align: center;
+  min-height: 2.4em;
+  max-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.2em;
+}
+
+.hero-back-stat-pill {
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.9);
+  background: rgba(0,0,0,0.55);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.55);
+  white-space: nowrap;
+}
+
+.hero-stat-k {
+  color: rgba(255,255,255,0.6);
+  font-weight: 900;
+}
+
+.hero-stat-dot {
+  margin: 0 0.4rem;
+  color: rgba(255,255,255,0.35);
+}
+
+.hero-back-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+}
+
+.hero-back-pill {
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 9999px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.55);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.55);
+}
+
+.hero-back-vs {
+  font-size: 1.25rem;
+  font-weight: 950;
+  letter-spacing: 0.28em;
+  color: white;
+}
+
+.hero-back-comain-line {
+  margin-top: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+  text-align: center;
+  max-width: 360px;
+}
+
+.hero-back-label {
+  display: block;
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  font-weight: 800;
+  margin-bottom: 0.35rem;
+}
+
+.hero-back-comain-fighters {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.hero-back-comain-fighter-name {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.75);
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.hero-back-comain-vs {
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .hero-content { padding: 1.5rem; }
+  .hero-flip-card { min-height: 520px; }
+  .hero-title { font-size: 2rem; }
+  .hero-back-fighter { min-height: auto; }
+  .hero-back-fighter-img { height: 260px; }
+}
+
+/* ============================================
+   HOMEPAGE EFFECTS - Upcoming Events Styles
+   ============================================ */
+
+@keyframes drawBorder {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.group:hover .card-border-path {
+  animation: drawBorder 1.8s ease-in-out forwards;
+}
+
+.group:hover .card-border-glow-path {
+  animation:
+    drawBorder 1.8s ease-in-out forwards,
+    glowPulse 1s ease-in-out infinite;
+  opacity: 0.8;
+}
+
+/* ============================================
+   HOMEPAGE EFFECTS - Champions Row Styles
+   ============================================ */
+
+@keyframes championGlowPulse {
+  0%, 100% {
+    opacity: 0.7;
+    filter: drop-shadow(0 0 2px #f59e0b);
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #f59e0b);
+  }
+}
+
+.champion-glow-line {
+  animation: championGlowPulse 3s ease-in-out infinite;
+}
+
+/* ============================================
+   HOMEPAGE EFFECTS - Champion Card Styles
+   ============================================ */
+
+.champions-scroll-container {
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0;
+}
+
+.champion-card-wrapper {
+  display: block;
+  flex-shrink: 0;
+  width: calc((100% - 16px) / 5);
+  min-width: 150px;
+  max-width: 200px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  animation: championFadeIn 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .champion-card-wrapper {
+    width: calc((100% - 8px) / 3);
+    min-width: 140px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .champion-card-wrapper {
+    width: calc((100% - 16px) / 5);
+  }
+}
+
+@keyframes championFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.champion-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: transparent;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.champion-card:hover {
+  background: transparent;
+}
+
+.champion-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  padding: 2px;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    transparent,
+    #f59e0b,
+    transparent,
+    transparent
+  );
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.champion-card:hover .champion-border {
+  opacity: 1;
+  animation: championBorderRotate 3s linear infinite;
+}
+
+@keyframes championBorderRotate {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.champion-spotlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    rgba(245, 158, 11, 0.2) 0%,
+    transparent 50%
+  );
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+  border-radius: 1rem;
+  clip-path: inset(0 round 1rem);
+}
+
+.champion-card:hover .champion-spotlight {
+  opacity: 1;
+}
+
+.champion-image-container {
+  position: relative;
+  display: flex;
+  height: 10rem;
+  width: 100%;
+  align-items: end;
+  justify-content: center;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 1rem 1rem 0 0;
+}
+
+.champion-image {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  object-position: bottom;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: brightness(0.95) contrast(1.05);
+}
+
+.champion-card:hover .champion-image {
+  transform: scale(1.08) rotate(2deg);
+  filter: brightness(1.1) contrast(1.1) saturate(1.2);
+}
+
+.champion-placeholder {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.champion-belt-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transform: skewX(-20deg);
+  opacity: 0;
+}
+
+.champion-card:hover .champion-belt-shine {
+  animation: championShine 1.5s ease-in-out;
+}
+
+@keyframes championShine {
+  0% {
+    left: -100%;
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    left: 200%;
+    opacity: 0;
+  }
+}
+
+.champion-info {
+  position: relative;
+  padding: 0.75rem 1rem;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  z-index: 10;
+  min-height: 4.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.champion-division {
+  font-size: 0.625rem;
+  color: #f59e0b;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.25rem;
+}
+
+.champion-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-height: 2.4em;
+  max-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.2em;
+}
+
+.champion-card:hover .champion-name {
+  color: #f59e0b;
+}
+
+.champion-name-text {
+  position: relative;
+  display: inline-block;
+}
+
+.champion-name-text::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.6),
+    transparent
+  );
+  opacity: 0;
+}
+
+.champion-card:hover .champion-name-text::after {
+  animation: championTextShine 1.2s ease-in-out 0.3s;
+}
+
+@keyframes championTextShine {
+  0% {
+    left: -100%;
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    left: 200%;
+    opacity: 0;
+  }
+}
