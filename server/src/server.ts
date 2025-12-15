@@ -64,6 +64,23 @@ app.use("/api/auth", authRoutes);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/api/ufc", eventDetailsRoutes);
 
+/**
+ * ✅ 404 fallback (ZAP'in baktığı /, /api, /robots.txt, /sitemap.xml gibi yollar için)
+ * Bu sayede 404 sayfalarında da CSP/Permissions-Policy/Cache-Control net olur.
+ */
+app.use((_req, res) => {
+  res
+    .status(404)
+    .set({
+      "Content-Security-Policy":
+        "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'",
+      "Permissions-Policy":
+        "geolocation=(), camera=(), microphone=(), payment=(), usb=()",
+      "Cache-Control": "no-store",
+    })
+    .json({ success: false, message: "Not found" });
+});
+
 /** 🔹 SERVER START */
 const start = async () => {
   try {
