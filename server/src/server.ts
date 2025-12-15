@@ -1,7 +1,10 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+
 import { connectDB } from "./config/db";
 import { PORT } from "./config/env";
+
 import fighterRoutes from "./routes/fighterRoutes";
 import favoriteRoutes from "./routes/favoriteRoutes";
 import swaggerUi from "swagger-ui-express";
@@ -13,17 +16,52 @@ import eventDetailsRoutes from "./routes/eventDetailsRoutes";
 
 const app = express();
 
-// 🔹 JSON body parse
-app.use(express.json());
+/** 🔒 Hide framework fingerprint */
+app.disable("x-powered-by");
 
-// 🔹 CORS
+/** 🔒 Basic security headers */
 app.use(
-  cors({
-    origin: "*",
+  helmet({
+    // Swagger UI genelde inline script/style kullanabilir; gerekiyorsa açarız.
+    // contentSecurityPolicy: false,
   })
 );
 
-// 🔹 HEALTH CHECK
+/** 🔹 JSON body parse */
+app.use(express.json());
+
+/** 🔒 CORS (production için allowlist) */
+const allowedOrigins = [
+  "https://ufc.aykuttakkus.com.tr",
+  "https://ufc-website.pages.dev",
+  // Cloudflare Pages preview subdomain'leri gerekiyorsa ekle:
+  // "https://08e37a8a.ufc-website.pages.dev",
+];
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // origin yoksa (curl/postman/server-to-server) izin ver
+      if (!origin) return cb(null, true);
+
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      // İstersen dev ortamında localhost'u aç:
+      if (origin.startsWith("http://localhost:")) return cb(null, true);
+
+      return cb(new Error(`CORS blocked: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    // cookie/session kullanmıyorsan false kalsın
+    credentials: false,
+  })
+);
+
+// Preflight istekleri
+app.options("*", cors());
+
+/** 🔹 HEALTH CHECK */
 app.get("/api/health", (_req, res) => {
   return res.json({
     success: true,
@@ -31,21 +69,29 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// ✅ (Opsiyonel) daha standart kısa health URL
+/** ✅ daha standart kısa health URL */
 app.get("/health", (_req, res) => {
   return res.status(200).send("ok");
 });
 
-// 🔹 ROUTES
+/** 🔹 ROUTES */
 app.use("/api/ufc/rankings", ufcRankingsRoutes);
 app.use("/api/fighters", fighterRoutes);
 app.use("/api/ufc/events", ufcEventsRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/auth", authRoutes);
+
+/**
+ * Swagger UI bazen CSP/Helmet ile uğraştırabilir.
+ * Eğer swagger ekranı sorun çıkarırsa:
+ * - helmet'i route bazında gevşetebiliriz ya da
+ * - /api-docs için ayrı middleware kullanırız.
+ */
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 app.use("/api/ufc", eventDetailsRoutes);
 
-// 🔹 SERVER START
+/** 🔹 SERVER START */
 const start = async () => {
   try {
     await connectDB();
@@ -62,7 +108,7 @@ const start = async () => {
 
 start();
 
-// ✅ Crash guard (özellikle scraping gibi yerlerde kritik)
+/** ✅ Crash guard (özellikle scraping gibi yerlerde kritik) */
 process.on("unhandledRejection", (reason) => {
   console.error("🔥 unhandledRejection:", reason);
 });
